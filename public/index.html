@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartM Calendar Slots</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <div class="hero">
+          <p class="eyebrow">SmartM</p>
+          <h1>Свободные слоты Mail.ru по CalDAV</h1>
+          <p class="lead">
+            Укажите e-mail и специальный пароль для внешнего приложения. Сервис сохранит
+            данные и покажет свободные окна на ближайшие 14 дней по всем доступным календарям.
+          </p>
+        </div>
+
+        <form id="credentials-form" class="form" autocomplete="on">
+          <label class="field">
+            <span>E-mail</span>
+            <input id="email" name="email" type="email" placeholder="name@mail.ru" required />
+          </label>
+
+          <label class="field">
+            <span>Пароль для приложения</span>
+            <div class="password-wrap">
+              <input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Специальный пароль Mail.ru"
+                required
+              />
+              <button id="toggle-password" class="ghost-button" type="button" aria-label="Показать пароль">
+                <span class="toggle-label">Показать</span>
+              </button>
+            </div>
+          </label>
+
+          <div class="actions">
+            <button id="save-button" class="primary-button" type="submit">Сохранить</button>
+            <button id="check-button" class="secondary-button" type="button">
+              Проверить доступные слоты
+            </button>
+          </div>
+        </form>
+
+        <div id="status" class="status" aria-live="polite"></div>
+
+        <section class="results">
+          <div class="results-head">
+            <h2>Доступные слоты</h2>
+            <p id="summary" class="summary">
+              После проверки здесь появятся свободные интервалы и занятые события.
+            </p>
+          </div>
+          <div id="slots" class="slots empty">
+            <p>Пока данных нет.</p>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
