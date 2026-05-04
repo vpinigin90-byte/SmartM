@@ -115,10 +115,6 @@ h1 {
   display: none;
 }
 
-.hidden-modal {
-  display: none;
-}
-
 .form {
   display: grid;
   gap: 18px;
@@ -435,6 +431,10 @@ button:disabled {
   display: grid;
   place-items: center;
   padding: 24px;
+}
+
+.modal.hidden-modal {
+  display: none;
 }
 
 .modal-backdrop {
