@@ -559,7 +559,11 @@ async function fetchCalendarEvents(email, password, calendar, rangeStartIso, ran
   <D:prop>
     <D:getetag />
     <C:calendar-data>
-      <C:expand start="${startUtc}" end="${endUtc}" />
+      <C:comp name="VCALENDAR">
+        <C:comp name="VEVENT">
+          <C:expand start="${startUtc}" end="${endUtc}" />
+        </C:comp>
+      </C:comp>
     </C:calendar-data>
   </D:prop>
   <C:filter>
@@ -636,11 +640,7 @@ async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
   return {
     calendars,
     events: allEvents.sort((left, right) => new Date(left.start) - new Date(right.start)),
-    busy: mergeBusyIntervals(
-      allBusyIntervals.length > 0 ? allBusyIntervals : allEvents,
-      rangeStartIso,
-      rangeEndIso,
-    ),
+    busy: mergeBusyIntervals([...allBusyIntervals, ...allEvents], rangeStartIso, rangeEndIso),
   };
 }
 
