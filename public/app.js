@@ -1,14 +1,21 @@
 const emailInput = document.querySelector("#email");
 const passwordInput = document.querySelector("#password");
+const employeeIdInput = document.querySelector("#employee-id");
+const employeeNameInput = document.querySelector("#employee-name");
+const employeePanelTitle = document.querySelector("#employee-panel-title");
 const statusNode = document.querySelector("#status");
 const summaryNode = document.querySelector("#summary");
 const eventsSummaryNode = document.querySelector("#events-summary");
 const slotsNode = document.querySelector("#slots");
 const eventsNode = document.querySelector("#events");
+const employeesListNode = document.querySelector("#employees-list");
 const saveButton = document.querySelector("#save-button");
 const checkButton = document.querySelector("#check-button");
 const reloadCalendarsButton = document.querySelector("#reload-calendars-button");
 const loadEventsButton = document.querySelector("#load-events-button");
+const addEmployeeButton = document.querySelector("#add-employee-button");
+const toggleEventFormButton = document.querySelector("#toggle-event-form-button");
+const eventFormPanel = document.querySelector("#event-form-panel");
 const togglePasswordButton = document.querySelector("#toggle-password");
 const togglePasswordLabel = document.querySelector(".toggle-label");
 const credentialsForm = document.querySelector("#credentials-form");
@@ -24,17 +31,109 @@ const eventStartInput = document.querySelector("#event-start");
 const eventEndInput = document.querySelector("#event-end");
 const eventLocationInput = document.querySelector("#event-location");
 const eventDescriptionInput = document.querySelector("#event-description");
+const tabButtons = [...document.querySelectorAll(".tab-button")];
+const tabPanels = [...document.querySelectorAll("[data-tab-panel]")];
 
 const state = {
+  employees: [],
+  activeEmployeeId: null,
   calendars: [],
   events: [],
   eventsRangeStart: null,
   eventsRangeEnd: null,
+  eventFormVisible: false,
 };
 
 function setStatus(message, kind = "") {
   statusNode.textContent = message;
   statusNode.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function getActiveEmployee() {
+  return (
+    state.employees.find((employee) => employee.id === state.activeEmployeeId) ||
+    state.employees[0] ||
+    null
+  );
+}
+
+function switchTab(tabName) {
+  tabButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.tab === tabName);
+  });
+  tabPanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.tabPanel === tabName);
+  });
+}
+
+function renderEmployees() {
+  if (!state.employees.length) {
+    employeesListNode.classList.add("empty");
+    employeesListNode.innerHTML = "<p>Сотрудников пока нет.</p>";
+    return;
+  }
+
+  employeesListNode.classList.remove("empty");
+  employeesListNode.innerHTML = state.employees
+    .map(
+      (employee) => `
+        <article class="employee-card${employee.id === state.activeEmployeeId ? " active" : ""}">
+          <div class="employee-card-head">
+            <div>
+              <strong>${escapeHtml(employee.name)}</strong>
+              <p>${escapeHtml(employee.email)}</p>
+            </div>
+            ${employee.id === state.activeEmployeeId ? '<span class="employee-badge">Активный</span>' : ""}
+          </div>
+          <div class="employee-card-actions">
+            <button class="ghost-button" type="button" data-action="select-employee" data-id="${escapeHtml(employee.id)}">
+              Открыть
+            </button>
+          </div>
+        </article>`,
+    )
+    .join("");
+}
+
+function fillEmployeeForm(employee = null) {
+  const activeEmployee = employee || getActiveEmployee();
+
+  if (!activeEmployee) {
+    employeeIdInput.value = "";
+    employeeNameInput.value = "";
+    emailInput.value = "";
+    passwordInput.value = "";
+    employeePanelTitle.textContent = "Новый сотрудник";
+    return;
+  }
+
+  employeeIdInput.value = activeEmployee.id;
+  employeeNameInput.value = activeEmployee.name;
+  emailInput.value = activeEmployee.email;
+  passwordInput.value = activeEmployee.password;
+  employeePanelTitle.textContent = activeEmployee.name;
+}
+
+function startNewEmployee() {
+  employeeIdInput.value = "";
+  employeeNameInput.value = "";
+  emailInput.value = "";
+  passwordInput.value = "";
+  employeePanelTitle.textContent = "Новый сотрудник";
+}
+
+function applyEmployeesConfig(config) {
+  state.employees = config.employees || [];
+  state.activeEmployeeId =
+    config.activeEmployeeId || state.employees[0]?.id || null;
+  renderEmployees();
+  fillEmployeeForm();
+}
+
+function setEventFormVisibility(visible) {
+  state.eventFormVisible = visible;
+  eventFormPanel.classList.toggle("hidden-panel", !visible);
+  toggleEventFormButton.textContent = visible ? "Скрыть форму встреч" : "Показать форму встреч";
 }
 
 function toLocalDayStart(date) {
@@ -132,7 +231,6 @@ function buildFreeSlots(busyIntervals, rangeStart, rangeEnd) {
       if (interval.start > freeStart) {
         free.push({ start: new Date(freeStart), end: new Date(interval.start) });
       }
-
       if (interval.end > freeStart) {
         freeStart = new Date(interval.end);
       }
@@ -179,17 +277,13 @@ function renderSlots(result, rangeStart, rangeEnd) {
       const dayEvents = eventsByDay.get(dayKey) || [];
       const freeList = day.free.length
         ? `<ul class="slot-list">${day.free
-            .map(
-              (slot) => `<li class="slot-item"><strong>${formatInterval(slot.start, slot.end)}</strong><span>свободно</span></li>`,
-            )
+            .map((slot) => `<li class="slot-item"><strong>${formatInterval(slot.start, slot.end)}</strong><span>свободно</span></li>`)
             .join("")}</ul>`
-        : `<p>Свободных окон нет.</p>`;
+        : "<p>Свободных окон нет.</p>";
 
       const eventList = dayEvents.length
         ? `<div class="day-grid"><h4>Занятые события</h4><ul class="event-list">${dayEvents
-            .map(
-              (event) => `<li class="event-item"><strong>${escapeHtml(event.summary)}</strong><span class="event-meta">${event.isAllDay ? "весь день" : formatInterval(new Date(event.start), new Date(event.end))} · ${escapeHtml(event.calendarName)}</span></li>`,
-            )
+            .map((event) => `<li class="event-item"><strong>${escapeHtml(event.summary)}</strong><span class="event-meta">${event.isAllDay ? "весь день" : formatInterval(new Date(event.start), new Date(event.end))} · ${escapeHtml(event.calendarName)}</span></li>`)
             .join("")}</ul></div>`
         : "";
 
@@ -203,16 +297,13 @@ function renderSlots(result, rangeStart, rangeEnd) {
 
 function renderCalendars() {
   if (!state.calendars.length) {
-    calendarSelect.innerHTML = `<option value="">Календари не найдены</option>`;
+    calendarSelect.innerHTML = '<option value="">Календари не найдены</option>';
     return;
   }
 
   const previousValue = calendarSelect.value;
   calendarSelect.innerHTML = state.calendars
-    .map(
-      (calendar) =>
-        `<option value="${escapeHtml(calendar.url)}">${escapeHtml(calendar.name)}</option>`,
-    )
+    .map((calendar) => `<option value="${escapeHtml(calendar.url)}">${escapeHtml(calendar.name)}</option>`)
     .join("");
 
   if (state.calendars.some((calendar) => calendar.url === previousValue)) {
@@ -228,8 +319,8 @@ function renderEvents() {
     return;
   }
 
-  eventsNode.classList.remove("empty");
   const recurringCount = state.events.filter((event) => event.isRecurring).length;
+  eventsNode.classList.remove("empty");
   eventsSummaryNode.textContent = `Загружено событий: ${state.events.length}. Повторяющихся инстансов: ${recurringCount}. Показан диапазон на 30 дней вперёд.`;
   eventsNode.innerHTML = `<ul class="event-list full">${state.events
     .map(
@@ -238,7 +329,7 @@ function renderEvents() {
           <div class="event-content">
             <div class="event-title-row">
               <strong>${escapeHtml(event.summary)}</strong>
-              ${event.isRecurring ? `<span class="event-badge">Экземпляр серии</span>` : ""}
+              ${event.isRecurring ? '<span class="event-badge">Экземпляр серии</span>' : ""}
             </div>
             <span class="event-meta">${formatDateTimeLabel(new Date(event.start))} - ${formatDateTimeLabel(new Date(event.end))}</span>
             <span class="event-meta">${escapeHtml(event.calendarName)}${event.location ? ` · ${escapeHtml(event.location)}` : ""}</span>
@@ -246,8 +337,8 @@ function renderEvents() {
             ${event.description ? `<p class="event-description">${escapeHtml(event.description)}</p>` : ""}
           </div>
           <div class="event-actions">
-            <button class="ghost-button" type="button" data-action="edit" data-index="${index}">Редактировать</button>
-            <button class="secondary-button danger-button" type="button" data-action="delete" data-index="${index}">Удалить</button>
+            <button class="ghost-button" type="button" data-action="edit-event" data-index="${index}">Редактировать</button>
+            <button class="secondary-button danger-button" type="button" data-action="delete-event" data-index="${index}">Удалить</button>
           </div>
         </li>`,
     )
@@ -281,46 +372,45 @@ function fillEventForm(event) {
   eventDescriptionInput.value = event.description || "";
   eventStartInput.value = toDateTimeLocalValue(new Date(event.start));
   eventEndInput.value = toDateTimeLocalValue(new Date(event.end));
-
   if (event.calendarUrl) {
     calendarSelect.value = event.calendarUrl;
   }
-
   eventSubmitButton.textContent = "Сохранить изменения";
+  setEventFormVisibility(true);
 }
 
 async function apiRequest(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json();
-
   if (!response.ok) {
     throw new Error(payload.error || "Ошибка запроса.");
   }
-
   return payload;
 }
 
-async function loadSavedConfig() {
-  const config = await apiRequest("/api/config");
-  emailInput.value = config.email || "";
-  passwordInput.value = config.password || "";
+async function loadEmployees() {
+  const config = await apiRequest("/api/employees");
+  applyEmployeesConfig(config);
 }
 
-async function saveCredentials() {
-  setStatus("Сохраняю данные...", "");
+async function saveEmployee() {
+  setStatus("Сохраняю сотрудника...", "");
   saveButton.disabled = true;
 
   try {
-    await apiRequest("/api/config", {
+    const config = await apiRequest("/api/employees", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: employeeIdInput.value.trim(),
+        name: employeeNameInput.value.trim(),
         email: emailInput.value.trim(),
         password: passwordInput.value.trim(),
       }),
     });
 
-    setStatus("Данные сохранены.", "success");
+    applyEmployeesConfig(config);
+    setStatus("Сотрудник сохранён.", "success");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
@@ -328,9 +418,26 @@ async function saveCredentials() {
   }
 }
 
+async function activateEmployee(employeeId) {
+  try {
+    const config = await apiRequest("/api/employees/active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: employeeId }),
+    });
+    applyEmployeesConfig(config);
+    state.calendars = [];
+    state.events = [];
+    renderCalendars();
+    renderEvents();
+    setStatus("Активный сотрудник переключен.", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
 async function loadCalendars() {
   reloadCalendarsButton.disabled = true;
-
   try {
     const payload = await apiRequest("/api/calendars");
     state.calendars = payload.calendars || [];
@@ -389,6 +496,7 @@ async function checkSlots() {
     });
 
     renderSlots(payload, rangeStart, rangeEnd);
+    switchTab("calendar");
     setStatus("Слоты обновлены.", "success");
   } catch (error) {
     setStatus(error.message, "error");
@@ -424,7 +532,6 @@ async function submitEventForm(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
     resetEventForm();
     await loadEvents();
     setStatus(isEditing ? "Событие обновлено." : "Событие создано.", "success");
@@ -453,7 +560,6 @@ async function deleteEventByIndex(index) {
         etag: event.etag,
       }),
     });
-
     await loadEvents();
     setStatus("Событие удалено.", "success");
   } catch (error) {
@@ -463,12 +569,17 @@ async function deleteEventByIndex(index) {
 
 credentialsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  await saveCredentials();
+  await saveEmployee();
 });
 
 checkButton.addEventListener("click", checkSlots);
 reloadCalendarsButton.addEventListener("click", loadCalendars);
 loadEventsButton.addEventListener("click", loadEvents);
+addEmployeeButton.addEventListener("click", startNewEmployee);
+toggleEventFormButton.addEventListener("click", () => {
+  setEventFormVisibility(!state.eventFormVisible);
+});
+
 eventForm.addEventListener("submit", submitEventForm);
 eventResetButton.addEventListener("click", resetEventForm);
 
@@ -479,15 +590,27 @@ eventsNode.addEventListener("click", async (event) => {
   }
 
   const index = Number(button.dataset.index);
-  if (button.dataset.action === "edit") {
+  if (button.dataset.action === "edit-event") {
     fillEventForm(state.events[index]);
-    window.scrollTo({ top: eventForm.offsetTop - 20, behavior: "smooth" });
     return;
   }
 
-  if (button.dataset.action === "delete") {
+  if (button.dataset.action === "delete-event") {
     await deleteEventByIndex(index);
   }
+});
+
+employeesListNode.addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-action='select-employee']");
+  if (!button) {
+    return;
+  }
+
+  await activateEmployee(button.dataset.id);
+});
+
+tabButtons.forEach((button) => {
+  button.addEventListener("click", () => switchTab(button.dataset.tab));
 });
 
 togglePasswordButton.addEventListener("click", () => {
@@ -498,9 +621,13 @@ togglePasswordButton.addEventListener("click", () => {
 });
 
 resetEventForm();
+setEventFormVisibility(false);
 
-loadSavedConfig()
-  .then(loadCalendars)
+loadEmployees()
+  .then(() => {
+    renderCalendars();
+    renderEvents();
+  })
   .catch(() => {
-    setStatus("Не удалось загрузить сохранённые данные.", "error");
+    setStatus("Не удалось загрузить сотрудников.", "error");
   });

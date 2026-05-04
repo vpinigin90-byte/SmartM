@@ -9,136 +9,191 @@
   <body>
     <main class="shell">
       <section class="card">
+        <div class="tabs">
+          <button class="tab-button active" type="button" data-tab="employees">Сотрудники</button>
+          <button class="tab-button" type="button" data-tab="calendar">Календарь</button>
+        </div>
+
         <div class="hero">
           <p class="eyebrow">SmartM</p>
           <h1>Mail.ru CalDAV Client</h1>
           <p class="lead">
-            Одна страница для хранения учётных данных, просмотра свободных слотов, чтения
-            событий и базового управления календарём через CalDAV.
+            Одна страница для хранения учётных данных сотрудников, просмотра свободных
+            слотов, чтения событий и базового управления календарём через CalDAV.
           </p>
         </div>
 
-        <form id="credentials-form" class="form" autocomplete="on">
-          <label class="field">
-            <span>E-mail</span>
-            <input id="email" name="email" type="email" placeholder="name@mail.ru" required />
-          </label>
-
-          <label class="field">
-            <span>Пароль для приложения</span>
-            <div class="password-wrap">
-              <input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Специальный пароль Mail.ru"
-                required
-              />
-              <button id="toggle-password" class="ghost-button" type="button" aria-label="Показать пароль">
-                <span class="toggle-label">Показать</span>
-              </button>
-            </div>
-          </label>
-
-          <div class="actions">
-            <button id="save-button" class="primary-button" type="submit">Сохранить</button>
-            <button id="check-button" class="secondary-button" type="button">
-              Проверить доступные слоты
-            </button>
-            <button id="reload-calendars-button" class="ghost-button" type="button">
-              Обновить календари
-            </button>
-          </div>
-        </form>
-
         <div id="status" class="status" aria-live="polite"></div>
 
-        <section class="workspace">
-          <section class="panel">
-            <div class="results-head">
-              <h2>Календари и события</h2>
-              <p id="events-summary" class="summary">
-                Загрузите календари и события, чтобы создавать, редактировать и удалять встречи.
-              </p>
-            </div>
-
-            <div class="toolbar">
-              <label class="field compact-field">
-                <span>Календарь для новых событий</span>
-                <select id="calendar-select"></select>
-              </label>
-              <button id="load-events-button" class="secondary-button" type="button">
-                Загрузить события
-              </button>
-            </div>
-
-            <div id="events" class="events empty">
-              <p>События ещё не загружены.</p>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="results-head">
-              <h2>Событие</h2>
-              <p class="summary">
-                Базовый CRUD для встреч CalDAV. Для сложных повторяющихся серий понадобится
-                отдельная доработка.
-              </p>
-            </div>
-
-            <form id="event-form" class="form">
-              <input id="event-url" type="hidden" />
-              <input id="event-uid" type="hidden" />
-              <input id="event-etag" type="hidden" />
-
-              <label class="field">
-                <span>Тема</span>
-                <input id="event-summary" type="text" placeholder="Встреча" required />
-              </label>
-
-              <div class="split">
-                <label class="field">
-                  <span>Начало</span>
-                  <input id="event-start" type="datetime-local" required />
-                </label>
-                <label class="field">
-                  <span>Конец</span>
-                  <input id="event-end" type="datetime-local" required />
-                </label>
+        <section class="tab-panel active" data-tab-panel="employees">
+          <section class="employees-layout">
+            <section class="panel">
+              <div class="results-head">
+                <h2>Сотрудники</h2>
+                <p class="summary">
+                  Выберите сотрудника или добавьте нового. Активный сотрудник используется
+                  для проверки слотов и работы с календарём.
+                </p>
               </div>
-
-              <label class="field">
-                <span>Локация</span>
-                <input id="event-location" type="text" placeholder="Переговорка / Zoom" />
-              </label>
-
-              <label class="field">
-                <span>Описание</span>
-                <textarea id="event-description" rows="4" placeholder="Комментарий к событию"></textarea>
-              </label>
 
               <div class="actions">
-                <button id="event-submit-button" class="primary-button" type="submit">
-                  Создать событие
-                </button>
-                <button id="event-reset-button" class="ghost-button" type="button">
-                  Очистить форму
+                <button id="add-employee-button" class="primary-button" type="button">
+                  Добавить сотрудника
                 </button>
               </div>
-            </form>
+
+              <div id="employees-list" class="employees-list empty">
+                <p>Сотрудников пока нет.</p>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="results-head">
+                <h2 id="employee-panel-title">Новый сотрудник</h2>
+                <p class="summary">
+                  Тот же интерфейс для ввода почты, пароля и проверки доступности.
+                </p>
+              </div>
+
+              <form id="credentials-form" class="form" autocomplete="on">
+                <input id="employee-id" type="hidden" />
+
+                <label class="field">
+                  <span>Имя сотрудника</span>
+                  <input id="employee-name" name="employee-name" type="text" placeholder="Иван Петров" required />
+                </label>
+
+                <label class="field">
+                  <span>E-mail</span>
+                  <input id="email" name="email" type="email" placeholder="name@mail.ru" required />
+                </label>
+
+                <label class="field">
+                  <span>Пароль для приложения</span>
+                  <div class="password-wrap">
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      placeholder="Специальный пароль Mail.ru"
+                      required
+                    />
+                    <button id="toggle-password" class="ghost-button" type="button" aria-label="Показать пароль">
+                      <span class="toggle-label">Показать</span>
+                    </button>
+                  </div>
+                </label>
+
+                <div class="actions">
+                  <button id="save-button" class="primary-button" type="submit">
+                    Сохранить сотрудника
+                  </button>
+                  <button id="check-button" class="secondary-button" type="button">
+                    Проверить доступные слоты
+                  </button>
+                  <button id="reload-calendars-button" class="ghost-button" type="button">
+                    Обновить календари
+                  </button>
+                </div>
+              </form>
+            </section>
           </section>
         </section>
 
-        <section class="results">
-          <div class="results-head">
-            <h2>Доступные слоты</h2>
-            <p id="summary" class="summary">
-              После проверки здесь появятся свободные интервалы и занятые события.
-            </p>
-          </div>
-          <div id="slots" class="slots empty">
-            <p>Пока данных нет.</p>
-          </div>
+        <section class="tab-panel" data-tab-panel="calendar">
+          <section class="workspace">
+            <section class="panel">
+              <div class="results-head">
+                <h2>Календари и события</h2>
+                <p id="events-summary" class="summary">
+                  Загрузите календари и события, чтобы создавать, редактировать и удалять встречи.
+                </p>
+              </div>
+
+              <div class="toolbar">
+                <label class="field compact-field">
+                  <span>Календарь для новых событий</span>
+                  <select id="calendar-select"></select>
+                </label>
+                <button id="load-events-button" class="secondary-button" type="button">
+                  Загрузить события
+                </button>
+              </div>
+
+              <div class="actions">
+                <button id="toggle-event-form-button" class="ghost-button" type="button">
+                  Показать форму встреч
+                </button>
+              </div>
+
+              <div id="events" class="events empty">
+                <p>События ещё не загружены.</p>
+              </div>
+            </section>
+
+            <section id="event-form-panel" class="panel hidden-panel">
+              <div class="results-head">
+                <h2>Событие</h2>
+                <p class="summary">
+                  Базовый CRUD для встреч CalDAV. Для сложных повторяющихся серий понадобится
+                  отдельная доработка.
+                </p>
+              </div>
+
+              <form id="event-form" class="form">
+                <input id="event-url" type="hidden" />
+                <input id="event-uid" type="hidden" />
+                <input id="event-etag" type="hidden" />
+
+                <label class="field">
+                  <span>Тема</span>
+                  <input id="event-summary" type="text" placeholder="Встреча" required />
+                </label>
+
+                <div class="split">
+                  <label class="field">
+                    <span>Начало</span>
+                    <input id="event-start" type="datetime-local" required />
+                  </label>
+                  <label class="field">
+                    <span>Конец</span>
+                    <input id="event-end" type="datetime-local" required />
+                  </label>
+                </div>
+
+                <label class="field">
+                  <span>Локация</span>
+                  <input id="event-location" type="text" placeholder="Переговорка / Zoom" />
+                </label>
+
+                <label class="field">
+                  <span>Описание</span>
+                  <textarea id="event-description" rows="4" placeholder="Комментарий к событию"></textarea>
+                </label>
+
+                <div class="actions">
+                  <button id="event-submit-button" class="primary-button" type="submit">
+                    Создать событие
+                  </button>
+                  <button id="event-reset-button" class="ghost-button" type="button">
+                    Очистить форму
+                  </button>
+                </div>
+              </form>
+            </section>
+          </section>
+
+          <section class="results">
+            <div class="results-head">
+              <h2>Доступные слоты</h2>
+              <p id="summary" class="summary">
+                После проверки здесь появятся свободные интервалы и занятые события.
+              </p>
+            </div>
+            <div id="slots" class="slots empty">
+              <p>Пока данных нет.</p>
+            </div>
+          </section>
         </section>
       </section>
     </main>

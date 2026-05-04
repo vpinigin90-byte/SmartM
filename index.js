@@ -14,6 +14,49 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const CONFIG_PATH = path.join(DATA_DIR, "smartm-config.json");
 
+function normalizeConfig(config = {}) {
+  if (Array.isArray(config.employees)) {
+    return {
+      employees: config.employees.map((employee) => ({
+        id: String(employee.id || crypto.randomUUID()),
+        name: String(employee.name || employee.email || "Сотрудник").trim(),
+        email: String(employee.email || "").trim(),
+        password: String(employee.password || "").trim(),
+      })),
+      activeEmployeeId: config.activeEmployeeId ? String(config.activeEmployeeId) : null,
+    };
+  }
+
+  const email = String(config.email || "").trim();
+  const password = String(config.password || "").trim();
+
+  if (!email && !password) {
+    return { employees: [], activeEmployeeId: null };
+  }
+
+  const employeeId = crypto.randomUUID();
+  return {
+    employees: [
+      {
+        id: employeeId,
+        name: email || "Сотрудник",
+        email,
+        password,
+      },
+    ],
+    activeEmployeeId: employeeId,
+  };
+}
+
+function getActiveEmployee(config) {
+  const normalizedConfig = normalizeConfig(config);
+  return (
+    normalizedConfig.employees.find((employee) => employee.id === normalizedConfig.activeEmployeeId) ||
+    normalizedConfig.employees[0] ||
+    null
+  );
+}
+
 function json(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
@@ -668,10 +711,10 @@ function mergeBusyIntervals(events, rangeStartIso, rangeEndIso) {
 async function loadConfig() {
   try {
     const fileContents = await fs.readFile(CONFIG_PATH, "utf8");
-    return JSON.parse(fileContents);
+    return normalizeConfig(JSON.parse(fileContents));
   } catch (error) {
     if (error.code === "ENOENT") {
-      return { email: "", password: "" };
+      return { employees: [], activeEmployeeId: null };
     }
 
     throw error;
@@ -680,7 +723,7 @@ async function loadConfig() {
 
 async function saveConfig(config) {
   await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf8");
+  await fs.writeFile(CONFIG_PATH, JSON.stringify(normalizeConfig(config), null, 2), "utf8");
 }
 
 async function readRequestBody(request) {
@@ -699,8 +742,9 @@ async function readRequestBody(request) {
 
 async function getCredentials(overrides = {}) {
   const storedConfig = await loadConfig();
-  const email = String(overrides.email || storedConfig.email || "").trim();
-  const password = String(overrides.password || storedConfig.password || "").trim();
+  const activeEmployee = getActiveEmployee(storedConfig);
+  const email = String(overrides.email || activeEmployee?.email || "").trim();
+  const password = String(overrides.password || activeEmployee?.password || "").trim();
 
   if (!email || !password) {
     const error = new Error("Missing credentials");
@@ -1133,6 +1177,56 @@ async function handleApi(request, requestUrl, response) {
 
     await saveConfig({ email, password });
     return json(response, 200, { ok: true });
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/employees") {
+    const config = await loadConfig();
+    return json(response, 200, config);
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/employees") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request);
+    const employeeId = String(body.id || "").trim() || crypto.randomUUID();
+    const name = String(body.name || body.email || "Сотрудник").trim();
+    const email = String(body.email || "").trim();
+    const password = String(body.password || "").trim();
+
+    if (!email || !password) {
+      return json(response, 400, { error: "Укажите e-mail и пароль сотрудника." });
+    }
+
+    const employees = config.employees.filter((employee) => employee.id !== employeeId);
+    employees.push({
+      id: employeeId,
+      name,
+      email,
+      password,
+    });
+
+    const nextConfig = {
+      employees,
+      activeEmployeeId: employeeId,
+    };
+    await saveConfig(nextConfig);
+    return json(response, 200, nextConfig);
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/employees/active") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request);
+    const employeeId = String(body.id || "").trim();
+
+    if (!employeeId || !config.employees.some((employee) => employee.id === employeeId)) {
+      return json(response, 400, { error: "Не удалось выбрать сотрудника." });
+    }
+
+    const nextConfig = {
+      ...config,
+      activeEmployeeId: employeeId,
+    };
+    await saveConfig(nextConfig);
+    return json(response, 200, nextConfig);
   }
 
   if (request.method === "GET" && requestUrl.pathname === "/api/calendars") {
