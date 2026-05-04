@@ -325,19 +325,26 @@ function parseCalendarData(calendarData, calendarName, calendarUrl, metadata = {
       };
     }
 
+    const uid = properties.UID?.[0]?.value || null;
+    const recurrenceId = properties["RECURRENCE-ID"]?.[0]?.value || null;
+    const recurrenceRule = properties.RRULE?.[0]?.value || null;
+
     events.push({
       calendarName,
       calendarUrl,
       eventUrl: metadata.eventUrl || null,
       etag: metadata.etag || null,
-      uid: properties.UID?.[0]?.value || null,
+      uid,
       summary: properties.SUMMARY?.[0]?.value || "Busy",
       description: properties.DESCRIPTION?.[0]?.value || "",
       location: properties.LOCATION?.[0]?.value || "",
       start: start.iso,
       end: end.iso,
       isAllDay: start.isDateOnly,
-      recurrenceId: properties["RECURRENCE-ID"]?.[0]?.value || null,
+      recurrenceId,
+      recurrenceRule,
+      isRecurring: Boolean(recurrenceId || recurrenceRule),
+      instanceKey: [metadata.eventUrl || calendarUrl, uid || "no-uid", recurrenceId || start.iso].join("::"),
       status,
       transparency,
     });
@@ -698,9 +705,12 @@ async function fetchEventsAcrossCalendars(email, password, rangeStartIso, rangeE
 
   return {
     calendars,
-    events: perCalendarEvents
-      .flat()
-      .sort((left, right) => new Date(left.start) - new Date(right.start)),
+    events: [...new Map(
+      perCalendarEvents
+        .flat()
+        .sort((left, right) => new Date(left.start) - new Date(right.start))
+        .map((event) => [event.instanceKey, event]),
+    ).values()],
   };
 }
 

@@ -229,15 +229,20 @@ function renderEvents() {
   }
 
   eventsNode.classList.remove("empty");
-  eventsSummaryNode.textContent = `Загружено событий: ${state.events.length}. Показан диапазон на 30 дней вперёд.`;
+  const recurringCount = state.events.filter((event) => event.isRecurring).length;
+  eventsSummaryNode.textContent = `Загружено событий: ${state.events.length}. Повторяющихся инстансов: ${recurringCount}. Показан диапазон на 30 дней вперёд.`;
   eventsNode.innerHTML = `<ul class="event-list full">${state.events
     .map(
       (event, index) => `
         <li class="event-row">
           <div class="event-content">
-            <strong>${escapeHtml(event.summary)}</strong>
+            <div class="event-title-row">
+              <strong>${escapeHtml(event.summary)}</strong>
+              ${event.isRecurring ? `<span class="event-badge">Экземпляр серии</span>` : ""}
+            </div>
             <span class="event-meta">${formatDateTimeLabel(new Date(event.start))} - ${formatDateTimeLabel(new Date(event.end))}</span>
             <span class="event-meta">${escapeHtml(event.calendarName)}${event.location ? ` · ${escapeHtml(event.location)}` : ""}</span>
+            ${event.recurrenceId ? `<span class="event-meta">RECURRENCE-ID: ${escapeHtml(event.recurrenceId)}</span>` : ""}
             ${event.description ? `<p class="event-description">${escapeHtml(event.description)}</p>` : ""}
           </div>
           <div class="event-actions">
