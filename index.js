@@ -864,6 +864,7 @@ async function fetchCalendars(email, password, homeUrl) {
     <D:displayname />
     <D:resourcetype />
     <C:supported-calendar-component-set />
+    <D:current-user-privilege-set />
   </D:prop>
 </D:propfind>`,
   );
@@ -874,6 +875,11 @@ async function fetchCalendars(email, password, homeUrl) {
     const href = findFirstTagValue(responseXml, "href");
     const resourceType = findFirstTagValue(responseXml, "resourcetype") || "";
     const supportedComponents = findFirstTagValue(responseXml, "supported-calendar-component-set") || "";
+    const privileges = findFirstTagValue(responseXml, "current-user-privilege-set") || "";
+    const canWrite =
+      /(?:^|:)(write)(?:$|<)/i.test(privileges) ||
+      /write-content/i.test(privileges) ||
+      /bind/i.test(privileges);
 
     if (
       !href ||
@@ -886,6 +892,7 @@ async function fetchCalendars(email, password, homeUrl) {
     calendars.push({
       url: resolveHref(response.url, stripXml(href)),
       name: stripXml(findFirstTagValue(responseXml, "displayname") || "") || "Calendar",
+      canWrite,
     });
   }
 
@@ -984,6 +991,7 @@ async function putCalendarObject(email, password, eventUrl, eventIcs, options = 
     const error = new Error(`PUT failed with status ${response.status}`);
     error.statusCode = response.status;
     error.responseText = text;
+    error.eventUrl = eventUrl;
     throw error;
   }
 
@@ -1009,6 +1017,7 @@ async function deleteCalendarObject(email, password, eventUrl, etag = null) {
     const error = new Error(`DELETE failed with status ${response.status}`);
     error.statusCode = response.status;
     error.responseText = text;
+    error.eventUrl = eventUrl;
     throw error;
   }
 
@@ -1059,6 +1068,14 @@ function normalizeEventPayload(body) {
     eventUrl,
     etag,
   };
+}
+
+function findWritableCalendar(calendars, requestedUrl) {
+  if (requestedUrl) {
+    return calendars.find((calendar) => calendar.url === requestedUrl) || null;
+  }
+
+  return calendars.find((calendar) => calendar.canWrite) || calendars[0] || null;
 }
 
 async function fetchCalendarBusyIntervals(email, password, calendar, rangeStartIso, rangeEndIso) {
@@ -1156,7 +1173,10 @@ function handleCalDavError(response, error, fallbackMessage) {
 
   return json(response, statusCode, {
     error: message,
-    details: error.responseText ? error.responseText.slice(0, 1200) : error.message,
+    details: JSON.stringify({
+      message: error.responseText ? error.responseText.slice(0, 1200) : error.message,
+      eventUrl: error.eventUrl || null,
+    }),
   });
 }
 
@@ -1280,12 +1300,20 @@ async function handleApi(request, requestUrl, response) {
     try {
       const body = readRequestBody(request);
       const [{ email, password }, eventData] = await Promise.all([getCredentials(), body.then(normalizeEventPayload)]);
+      const calendars = await getCalendarsForUser(email, password);
+      const writableCalendar = findWritableCalendar(calendars, eventData.calendarUrl);
 
-      if (!eventData.calendarUrl) {
-        return json(response, 400, { error: "Выберите календарь для создания события." });
+      if (!writableCalendar) {
+        return json(response, 400, { error: "Не найден календарь, доступный для записи." });
       }
 
-      const eventUrl = buildEventUrl(eventData.calendarUrl, eventData.uid || crypto.randomUUID());
+      if (writableCalendar.canWrite === false) {
+        return json(response, 400, {
+          error: `Выбранный календарь "${writableCalendar.name}" недоступен для записи.`,
+        });
+      }
+
+      const eventUrl = buildEventUrl(writableCalendar.url, eventData.uid || crypto.randomUUID());
       const eventIcs = buildEventIcs({ ...eventData, uid: eventData.uid || path.basename(eventUrl, ".ics") });
       const result = await putCalendarObject(email, password, eventUrl, eventIcs, { ifNoneMatch: true });
       return json(response, 201, { ok: true, ...result });
