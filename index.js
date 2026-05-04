@@ -326,8 +326,19 @@ function parseCalendarData(calendarData, calendarName, calendarUrl, metadata = {
     }
 
     const uid = properties.UID?.[0]?.value || null;
-    const recurrenceId = properties["RECURRENCE-ID"]?.[0]?.value || null;
+    const recurrenceIdEntry = properties["RECURRENCE-ID"]?.[0] || null;
+    const recurrenceId = recurrenceIdEntry?.value || null;
+    const recurrenceIdParsed = recurrenceIdEntry
+      ? parseIcsDate(recurrenceIdEntry.value, recurrenceIdEntry.params.TZID)
+      : null;
     const recurrenceRule = properties.RRULE?.[0]?.value || null;
+    const exdates = (properties.EXDATE || []).flatMap((entry) =>
+      String(entry.value || "")
+        .split(",")
+        .map((value) => parseIcsDate(value.trim(), entry.params.TZID))
+        .filter(Boolean)
+        .map((parsed) => parsed.iso),
+    );
 
     events.push({
       calendarName,
@@ -342,9 +353,12 @@ function parseCalendarData(calendarData, calendarName, calendarUrl, metadata = {
       end: end.iso,
       isAllDay: start.isDateOnly,
       recurrenceId,
+      recurrenceIdIso: recurrenceIdParsed?.iso || null,
       recurrenceRule,
       isRecurring: Boolean(recurrenceId || recurrenceRule),
       instanceKey: [metadata.eventUrl || calendarUrl, uid || "no-uid", recurrenceId || start.iso].join("::"),
+      exdates,
+      timeZone: start.tzid,
       status,
       transparency,
     });
@@ -379,6 +393,205 @@ function getEventBusyIntervals(events) {
   return events
     .filter((event) => event.transparency !== "TRANSPARENT")
     .map((event) => ({ start: event.start, end: event.end }));
+}
+
+function parseRRule(rule) {
+  return Object.fromEntries(
+    String(rule || "")
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const [key, value = ""] = part.split("=");
+        return [key.toUpperCase(), value];
+      }),
+  );
+}
+
+function addUtcDays(isoString, days) {
+  return new Date(new Date(isoString).getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function addUtcMonths(isoString, months) {
+  const date = new Date(isoString);
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + months,
+      date.getUTCDate(),
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+    ),
+  ).toISOString();
+}
+
+function addUtcYears(isoString, years) {
+  const date = new Date(isoString);
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear() + years,
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+    ),
+  ).toISOString();
+}
+
+function overlapsRange(startIso, endIso, rangeStartIso, rangeEndIso) {
+  return new Date(startIso) < new Date(rangeEndIso) && new Date(endIso) > new Date(rangeStartIso);
+}
+
+function getUtcWeekdayCode(isoString) {
+  const weekdayCodes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+  return weekdayCodes[new Date(isoString).getUTCDay()];
+}
+
+function buildRecurringInstance(masterEvent, occurrenceStartIso, occurrenceEndIso, overrideEvent = null) {
+  const baseEvent = overrideEvent || masterEvent;
+  const recurrenceToken = overrideEvent?.recurrenceId || masterEvent.recurrenceId || occurrenceStartIso;
+
+  return {
+    ...baseEvent,
+    start: overrideEvent ? overrideEvent.start : occurrenceStartIso,
+    end: overrideEvent ? overrideEvent.end : occurrenceEndIso,
+    recurrenceId: overrideEvent?.recurrenceId || masterEvent.recurrenceId || occurrenceStartIso,
+    recurrenceIdIso: overrideEvent?.recurrenceIdIso || occurrenceStartIso,
+    recurrenceRule: masterEvent.recurrenceRule,
+    isRecurring: true,
+    instanceKey: [baseEvent.eventUrl || baseEvent.calendarUrl, baseEvent.uid || "no-uid", recurrenceToken].join("::"),
+  };
+}
+
+function expandRecurringMaster(masterEvent, overrides, rangeStartIso, rangeEndIso) {
+  const rule = parseRRule(masterEvent.recurrenceRule);
+  const freq = rule.FREQ;
+  const interval = Number(rule.INTERVAL || 1);
+  const count = Number(rule.COUNT || 0);
+  const until = rule.UNTIL ? parseIcsDate(rule.UNTIL, "UTC")?.iso || null : null;
+  const byDay = rule.BYDAY ? rule.BYDAY.split(",").map((value) => value.trim().toUpperCase()) : null;
+  const byMonthDay = rule.BYMONTHDAY
+    ? rule.BYMONTHDAY.split(",").map((value) => Number(value.trim())).filter(Boolean)
+    : null;
+  const excluded = new Set(masterEvent.exdates || []);
+  const durationMs = new Date(masterEvent.end).getTime() - new Date(masterEvent.start).getTime();
+  const instances = [];
+  let occurrenceStartIso = masterEvent.start;
+  let emittedCount = 0;
+  let iterations = 0;
+
+  while (iterations < 1200) {
+    iterations += 1;
+
+    if (until && new Date(occurrenceStartIso) > new Date(until)) {
+      break;
+    }
+
+    const occurrenceEndIso = new Date(new Date(occurrenceStartIso).getTime() + durationMs).toISOString();
+    const weekdayMatches = !byDay || byDay.some((code) => code.endsWith(getUtcWeekdayCode(occurrenceStartIso)));
+    const monthDayMatches = !byMonthDay || byMonthDay.includes(new Date(occurrenceStartIso).getUTCDate());
+    const notExcluded = !excluded.has(occurrenceStartIso);
+
+    if (weekdayMatches && monthDayMatches) {
+      emittedCount += 1;
+      if (notExcluded && overlapsRange(occurrenceStartIso, occurrenceEndIso, rangeStartIso, rangeEndIso)) {
+        const overrideEvent = overrides.get(occurrenceStartIso) || null;
+        instances.push(
+          buildRecurringInstance(masterEvent, occurrenceStartIso, occurrenceEndIso, overrideEvent),
+        );
+      }
+
+      if (count && emittedCount >= count) {
+        break;
+      }
+    }
+
+    if (freq === "DAILY") {
+      occurrenceStartIso = addUtcDays(occurrenceStartIso, interval);
+      continue;
+    }
+
+    if (freq === "WEEKLY") {
+      occurrenceStartIso = addUtcDays(occurrenceStartIso, 7 * interval);
+      continue;
+    }
+
+    if (freq === "MONTHLY") {
+      occurrenceStartIso = addUtcMonths(occurrenceStartIso, interval);
+      continue;
+    }
+
+    if (freq === "YEARLY") {
+      occurrenceStartIso = addUtcYears(occurrenceStartIso, interval);
+      continue;
+    }
+
+    break;
+  }
+
+  return instances;
+}
+
+function normalizeEventsToInstances(events, rangeStartIso, rangeEndIso) {
+  const groupedBySeries = new Map();
+
+  for (const event of events) {
+    const seriesKey = [event.calendarUrl, event.uid || event.eventUrl || event.start].join("::");
+    if (!groupedBySeries.has(seriesKey)) {
+      groupedBySeries.set(seriesKey, []);
+    }
+
+    groupedBySeries.get(seriesKey).push(event);
+  }
+
+  const normalized = [];
+
+  for (const seriesEvents of groupedBySeries.values()) {
+    const masterRecurring = seriesEvents.find((event) => event.recurrenceRule && !event.recurrenceIdIso);
+
+    if (!masterRecurring) {
+      normalized.push(
+        ...seriesEvents.filter((event) => overlapsRange(event.start, event.end, rangeStartIso, rangeEndIso)),
+      );
+      continue;
+    }
+
+    const overrides = new Map(
+      seriesEvents
+        .filter((event) => event.recurrenceIdIso)
+        .map((event) => [event.recurrenceIdIso, event]),
+    );
+    const expandedInstances = expandRecurringMaster(
+      masterRecurring,
+      overrides,
+      rangeStartIso,
+      rangeEndIso,
+    );
+
+    normalized.push(...expandedInstances);
+
+    for (const overrideEvent of overrides.values()) {
+      if (
+        !expandedInstances.some((instance) => instance.instanceKey === overrideEvent.instanceKey) &&
+        overlapsRange(overrideEvent.start, overrideEvent.end, rangeStartIso, rangeEndIso)
+      ) {
+        normalized.push(
+          buildRecurringInstance(
+            masterRecurring,
+            overrideEvent.recurrenceIdIso || overrideEvent.start,
+            overrideEvent.end,
+            overrideEvent,
+          ),
+        );
+      }
+    }
+  }
+
+  return [...new Map(normalized.map((event) => [event.instanceKey, event])).values()].sort(
+    (left, right) => new Date(left.start) - new Date(right.start),
+  );
 }
 
 function formatIcsDateTime(isoString) {
@@ -654,13 +867,7 @@ async function fetchCalendarEvents(email, password, calendar, rangeStartIso, ran
 <C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
   <D:prop>
     <D:getetag />
-    <C:calendar-data>
-      <C:comp name="VCALENDAR">
-        <C:comp name="VEVENT">
-          <C:expand start="${startUtc}" end="${endUtc}" />
-        </C:comp>
-      </C:comp>
-    </C:calendar-data>
+    <C:calendar-data />
   </D:prop>
   <C:filter>
     <C:comp-filter name="VCALENDAR">
@@ -705,12 +912,7 @@ async function fetchEventsAcrossCalendars(email, password, rangeStartIso, rangeE
 
   return {
     calendars,
-    events: [...new Map(
-      perCalendarEvents
-        .flat()
-        .sort((left, right) => new Date(left.start) - new Date(right.start))
-        .map((event) => [event.instanceKey, event]),
-    ).values()],
+    events: normalizeEventsToInstances(perCalendarEvents.flat(), rangeStartIso, rangeEndIso),
   };
 }
 
@@ -861,11 +1063,13 @@ async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
     allEvents.push(...calendarEvents);
   }
 
+  const normalizedEvents = normalizeEventsToInstances(allEvents, rangeStartIso, rangeEndIso);
+
   return {
     calendars,
-    events: allEvents.sort((left, right) => new Date(left.start) - new Date(right.start)),
+    events: normalizedEvents,
     busy: mergeBusyIntervals(
-      [...allBusyIntervals, ...getEventBusyIntervals(allEvents)],
+      [...allBusyIntervals, ...getEventBusyIntervals(normalizedEvents)],
       rangeStartIso,
       rangeEndIso,
     ),
