@@ -766,6 +766,63 @@ function buildMeetingSlotsFromBusy(busyIntervals, rangeStartIso, rangeEndIso, du
   return slots;
 }
 
+function getDateTimePartsInTimeZone(isoString, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timeZone || "UTC",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return Object.fromEntries(
+    formatter
+      .formatToParts(new Date(isoString))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+}
+
+function parseTimeToMinutes(value, fallback) {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(value || "").trim());
+  if (!match) {
+    return fallback;
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function filterMeetingSlotsByRules(slots, rules = {}) {
+  const excludedDates = new Set((rules.excludedDates || []).map((value) => String(value).trim()).filter(Boolean));
+  const timeZone = String(rules.timeZone || "Europe/Moscow").trim() || "Europe/Moscow";
+  const allowedStartMinutes = parseTimeToMinutes(rules.allowedStartTime, 0);
+  const allowedEndMinutes = parseTimeToMinutes(rules.allowedEndTime, 24 * 60);
+
+  return slots.filter((slot) => {
+    const startParts = getDateTimePartsInTimeZone(slot.start, timeZone);
+    const endParts = getDateTimePartsInTimeZone(slot.end, timeZone);
+    const localDate = `${startParts.year}-${startParts.month}-${startParts.day}`;
+    const startMinutes = Number(startParts.hour) * 60 + Number(startParts.minute);
+    const endMinutes = Number(endParts.hour) * 60 + Number(endParts.minute);
+
+    if (excludedDates.has(localDate)) {
+      return false;
+    }
+
+    if (startMinutes < allowedStartMinutes) {
+      return false;
+    }
+
+    if (endMinutes > allowedEndMinutes) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 async function loadConfig() {
   try {
     const fileContents = await fs.readFile(CONFIG_PATH, "utf8");
@@ -1212,7 +1269,7 @@ async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
   };
 }
 
-async function fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso) {
+async function fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso, rules = {}) {
   const uniqueEmployeeIds = [...new Set(employeeIds.filter(Boolean))];
 
   if (uniqueEmployeeIds.length !== 2) {
@@ -1233,7 +1290,10 @@ async function fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso) 
   );
 
   const combinedBusy = employeeResults.flatMap((item) => item.busy);
-  const slots = buildMeetingSlotsFromBusy(combinedBusy, rangeStartIso, rangeEndIso, 60, 30);
+  const slots = filterMeetingSlotsByRules(
+    buildMeetingSlotsFromBusy(combinedBusy, rangeStartIso, rangeEndIso, 60, 30),
+    rules,
+  );
 
   return {
     employees: employeeResults.map((item) => ({
@@ -1499,13 +1559,19 @@ async function handleApi(request, requestUrl, response) {
     const employeeIds = Array.isArray(body.employeeIds) ? body.employeeIds.map((value) => String(value || "").trim()) : [];
     const rangeStartIso = String(body.rangeStartIso || "").trim();
     const rangeEndIso = String(body.rangeEndIso || "").trim();
+    const rules = {
+      excludedDates: Array.isArray(body.excludedDates) ? body.excludedDates : [],
+      allowedStartTime: String(body.allowedStartTime || "").trim(),
+      allowedEndTime: String(body.allowedEndTime || "").trim(),
+      timeZone: String(body.timeZone || "").trim(),
+    };
 
     if (!rangeStartIso || !rangeEndIso) {
       return json(response, 400, { error: "Не передан диапазон поиска слотов." });
     }
 
     try {
-      const result = await fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso);
+      const result = await fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso, rules);
       return json(response, 200, result);
     } catch (error) {
       return handleCalDavError(response, error, "Не удалось получить общие слоты встречи.");
