@@ -200,6 +200,37 @@ function parseDurationToMs(value) {
   );
 }
 
+function formatUtcForCaldav(value) {
+  return new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function parsePeriodToInterval(value) {
+  const [startRaw, endRaw] = value.split("/");
+  const start = parseIcsDate(startRaw, "UTC");
+
+  if (!start) {
+    return null;
+  }
+
+  let end = parseIcsDate(endRaw, "UTC");
+
+  if (!end && endRaw?.startsWith("P")) {
+    const durationMs = parseDurationToMs(endRaw);
+    end = {
+      iso: new Date(new Date(start.iso).getTime() + durationMs).toISOString(),
+    };
+  }
+
+  if (!end) {
+    return null;
+  }
+
+  return {
+    start: start.iso,
+    end: end.iso,
+  };
+}
+
 function parseCalendarData(calendarData, calendarName, calendarUrl) {
   const unfolded = unfoldIcsLines(calendarData);
   const eventMatches = [...unfolded.matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/g)];
@@ -287,6 +318,28 @@ function parseCalendarData(calendarData, calendarName, calendarUrl) {
   }
 
   return events;
+}
+
+function parseFreeBusyData(calendarData) {
+  const unfolded = unfoldIcsLines(calendarData);
+  const freeBusyMatches = [...unfolded.matchAll(/^FREEBUSY(?:;[^:]+)?:([^\r\n]+)$/gim)];
+  const intervals = [];
+
+  for (const match of freeBusyMatches) {
+    const periods = match[1]
+      .split(",")
+      .map((period) => period.trim())
+      .filter(Boolean);
+
+    for (const period of periods) {
+      const interval = parsePeriodToInterval(period);
+      if (interval) {
+        intervals.push(interval);
+      }
+    }
+  }
+
+  return intervals;
 }
 
 function mergeBusyIntervals(events, rangeStartIso, rangeEndIso) {
@@ -492,8 +545,8 @@ async function fetchCalendars(email, password, homeUrl) {
 }
 
 async function fetchCalendarEvents(email, password, calendar, rangeStartIso, rangeEndIso) {
-  const startUtc = new Date(rangeStartIso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-  const endUtc = new Date(rangeEndIso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const startUtc = formatUtcForCaldav(rangeStartIso);
+  const endUtc = formatUtcForCaldav(rangeEndIso);
 
   const response = await fetchDav(
     calendar.url,
@@ -533,6 +586,28 @@ async function fetchCalendarEvents(email, password, calendar, rangeStartIso, ran
   return events;
 }
 
+async function fetchCalendarBusyIntervals(email, password, calendar, rangeStartIso, rangeEndIso) {
+  const startUtc = formatUtcForCaldav(rangeStartIso);
+  const endUtc = formatUtcForCaldav(rangeEndIso);
+
+  const response = await fetchDav(
+    calendar.url,
+    email,
+    password,
+    "REPORT",
+    {
+      Depth: "1",
+      Accept: "text/calendar, application/xml, text/xml;q=0.9, */*;q=0.8",
+    },
+    `<?xml version="1.0" encoding="utf-8"?>
+<C:free-busy-query xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <C:time-range start="${startUtc}" end="${endUtc}" />
+</C:free-busy-query>`,
+  );
+
+  return parseFreeBusyData(response.text);
+}
+
 async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
   const homeUrl = await discoverCalendarHome(email, password);
   const calendars = await fetchCalendars(email, password, homeUrl);
@@ -546,16 +621,26 @@ async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
   }
 
   const allEvents = [];
+  const allBusyIntervals = [];
 
   for (const calendar of calendars) {
-    const calendarEvents = await fetchCalendarEvents(email, password, calendar, rangeStartIso, rangeEndIso);
+    const [calendarBusyIntervals, calendarEvents] = await Promise.all([
+      fetchCalendarBusyIntervals(email, password, calendar, rangeStartIso, rangeEndIso).catch(() => []),
+      fetchCalendarEvents(email, password, calendar, rangeStartIso, rangeEndIso).catch(() => []),
+    ]);
+
+    allBusyIntervals.push(...calendarBusyIntervals);
     allEvents.push(...calendarEvents);
   }
 
   return {
     calendars,
     events: allEvents.sort((left, right) => new Date(left.start) - new Date(right.start)),
-    busy: mergeBusyIntervals(allEvents, rangeStartIso, rangeEndIso),
+    busy: mergeBusyIntervals(
+      allBusyIntervals.length > 0 ? allBusyIntervals : allEvents,
+      rangeStartIso,
+      rangeEndIso,
+    ),
   };
 }
 
