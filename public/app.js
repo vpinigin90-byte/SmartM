@@ -6,7 +6,9 @@ const employeePanelTitle = document.querySelector("#employee-panel-title");
 const statusNode = document.querySelector("#status");
 const summaryNode = document.querySelector("#summary");
 const eventsSummaryNode = document.querySelector("#events-summary");
+const meetingSummaryNode = document.querySelector("#meeting-summary");
 const slotsNode = document.querySelector("#slots");
+const meetingSlotsNode = document.querySelector("#meeting-slots");
 const eventsNode = document.querySelector("#events");
 const employeesListNode = document.querySelector("#employees-list");
 const saveButton = document.querySelector("#save-button");
@@ -15,6 +17,9 @@ const reloadCalendarsButton = document.querySelector("#reload-calendars-button")
 const loadEventsButton = document.querySelector("#load-events-button");
 const addEmployeeButton = document.querySelector("#add-employee-button");
 const toggleEventFormButton = document.querySelector("#toggle-event-form-button");
+const loadMeetingSlotsButton = document.querySelector("#load-meeting-slots-button");
+const meetingEmployeeASelect = document.querySelector("#meeting-employee-a");
+const meetingEmployeeBSelect = document.querySelector("#meeting-employee-b");
 const eventFormPanel = document.querySelector("#event-form-panel");
 const togglePasswordButton = document.querySelector("#toggle-password");
 const togglePasswordLabel = document.querySelector(".toggle-label");
@@ -42,6 +47,7 @@ const state = {
   eventsRangeStart: null,
   eventsRangeEnd: null,
   eventFormVisible: false,
+  sharedMeetingSlots: [],
 };
 
 function setStatus(message, kind = "") {
@@ -98,6 +104,33 @@ function renderEmployees() {
     .join("");
 }
 
+function renderMeetingEmployeeSelectors() {
+  if (!state.employees.length) {
+    meetingEmployeeASelect.innerHTML = '<option value="">Сотрудник не выбран</option>';
+    meetingEmployeeBSelect.innerHTML = '<option value="">Сотрудник не выбран</option>';
+    return;
+  }
+
+  const previousA = meetingEmployeeASelect.value;
+  const previousB = meetingEmployeeBSelect.value;
+  const options = state.employees
+    .map(
+      (employee) =>
+        `<option value="${escapeHtml(employee.id)}">${escapeHtml(employee.name)} · ${escapeHtml(employee.email)}</option>`,
+    )
+    .join("");
+
+  meetingEmployeeASelect.innerHTML = options;
+  meetingEmployeeBSelect.innerHTML = options;
+
+  meetingEmployeeASelect.value =
+    state.employees.some((employee) => employee.id === previousA) ? previousA : state.employees[0]?.id || "";
+  meetingEmployeeBSelect.value =
+    state.employees.some((employee) => employee.id === previousB)
+      ? previousB
+      : state.employees[1]?.id || state.employees[0]?.id || "";
+}
+
 function fillEmployeeForm(employee = null) {
   const activeEmployee = employee || getActiveEmployee();
 
@@ -130,6 +163,7 @@ function applyEmployeesConfig(config) {
   state.activeEmployeeId =
     config.activeEmployeeId || state.employees[0]?.id || null;
   renderEmployees();
+  renderMeetingEmployeeSelectors();
   fillEmployeeForm();
 }
 
@@ -296,6 +330,45 @@ function renderSlots(result, rangeStart, rangeEnd) {
 
   slotsNode.classList.remove("empty");
   slotsNode.innerHTML = html;
+}
+
+function renderSharedMeetingSlots(slots, employeeNames, rangeStart, rangeEnd) {
+  if (!slots.length) {
+    meetingSlotsNode.classList.add("empty");
+    meetingSlotsNode.innerHTML = "<p>Общих слотов на ближайшие 3 дня не найдено.</p>";
+    meetingSummaryNode.textContent = `Проверены сотрудники: ${employeeNames.join(" и ")}. Общих слотов нет.`;
+    return;
+  }
+
+  const buckets = new Map();
+  for (let cursor = toLocalDayStart(rangeStart); cursor < rangeEnd; cursor = toLocalDayEnd(cursor)) {
+    buckets.set(toLocalDayStart(cursor).toISOString(), []);
+  }
+
+  for (const slot of slots) {
+    const dayKey = toLocalDayStart(new Date(slot.start)).toISOString();
+    if (!buckets.has(dayKey)) {
+      buckets.set(dayKey, []);
+    }
+    buckets.get(dayKey).push(slot);
+  }
+
+  meetingSummaryNode.textContent = `Проверены сотрудники: ${employeeNames.join(" и ")}. Длительность слота 1 час, шаг между стартами 1 час 30 минут, горизонт 3 дня.`;
+  meetingSlotsNode.classList.remove("empty");
+  meetingSlotsNode.innerHTML = [...buckets.entries()]
+    .map(([dayKey, daySlots]) => {
+      const dayDate = new Date(dayKey);
+      const list = daySlots.length
+        ? `<ul class="slot-list">${daySlots
+            .map(
+              (slot) => `<li class="slot-item"><strong>${formatInterval(new Date(slot.start), new Date(slot.end))}</strong><span>оба свободны</span></li>`,
+            )
+            .join("")}</ul>`
+        : "<p>Нет общих слотов.</p>";
+
+      return `<article class="day-card"><h3>${formatDateLabel(dayDate)}</h3>${list}</article>`;
+    })
+    .join("");
 }
 
 function renderCalendars() {
@@ -496,6 +569,52 @@ async function loadEvents() {
   }
 }
 
+async function loadSharedMeetingSlots() {
+  const employeeAId = meetingEmployeeASelect.value;
+  const employeeBId = meetingEmployeeBSelect.value;
+
+  if (!employeeAId || !employeeBId) {
+    setStatus("Выберите двух сотрудников.", "error");
+    return;
+  }
+
+  if (employeeAId === employeeBId) {
+    setStatus("Для встречи нужны два разных сотрудника.", "error");
+    return;
+  }
+
+  const rangeStart = toLocalDayStart(new Date());
+  const rangeEnd = new Date(rangeStart);
+  rangeEnd.setDate(rangeEnd.getDate() + 3);
+  loadMeetingSlotsButton.disabled = true;
+  setStatus("Ищу общие слоты встречи...", "");
+
+  try {
+    const payload = await apiRequest("/api/meeting-slots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employeeIds: [employeeAId, employeeBId],
+        rangeStartIso: rangeStart.toISOString(),
+        rangeEndIso: rangeEnd.toISOString(),
+      }),
+    });
+
+    state.sharedMeetingSlots = payload.slots || [];
+    renderSharedMeetingSlots(
+      state.sharedMeetingSlots,
+      (payload.employees || []).map((employee) => employee.name),
+      rangeStart,
+      rangeEnd,
+    );
+    setStatus("Общие слоты загружены.", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  } finally {
+    loadMeetingSlotsButton.disabled = false;
+  }
+}
+
 async function checkSlots() {
   const rangeStart = toLocalDayStart(new Date());
   const rangeEnd = new Date(rangeStart);
@@ -597,6 +716,7 @@ checkButton.addEventListener("click", checkSlots);
 reloadCalendarsButton.addEventListener("click", loadCalendars);
 loadEventsButton.addEventListener("click", loadEvents);
 addEmployeeButton.addEventListener("click", startNewEmployee);
+loadMeetingSlotsButton.addEventListener("click", loadSharedMeetingSlots);
 toggleEventFormButton.addEventListener("click", () => {
   setEventFormVisibility(!state.eventFormVisible);
 });

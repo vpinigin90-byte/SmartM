@@ -708,6 +708,64 @@ function mergeBusyIntervals(events, rangeStartIso, rangeEndIso) {
   }));
 }
 
+function alignIsoUpToHalfHour(isoString) {
+  const date = new Date(isoString);
+  date.setUTCSeconds(0, 0);
+  const minutes = date.getUTCMinutes();
+  const remainder = minutes % 30;
+
+  if (remainder !== 0) {
+    date.setUTCMinutes(minutes + (30 - remainder));
+  }
+
+  return date.toISOString();
+}
+
+function buildMeetingSlotsFromBusy(busyIntervals, rangeStartIso, rangeEndIso, durationMinutes, gapMinutes) {
+  const mergedBusy = mergeBusyIntervals(busyIntervals, rangeStartIso, rangeEndIso);
+  const rangeStart = new Date(rangeStartIso).getTime();
+  const rangeEnd = new Date(rangeEndIso).getTime();
+  const durationMs = durationMinutes * 60 * 1000;
+  const stepMs = (durationMinutes + gapMinutes) * 60 * 1000;
+  const slots = [];
+  let cursor = rangeStart;
+
+  for (const busy of mergedBusy) {
+    const busyStart = new Date(busy.start).getTime();
+    const busyEnd = new Date(busy.end).getTime();
+
+    if (busyStart > cursor) {
+      let slotStartIso = alignIsoUpToHalfHour(new Date(cursor).toISOString());
+      let slotStart = new Date(slotStartIso).getTime();
+
+      while (slotStart + durationMs <= busyStart) {
+        slots.push({
+          start: new Date(slotStart).toISOString(),
+          end: new Date(slotStart + durationMs).toISOString(),
+        });
+        slotStart += stepMs;
+      }
+    }
+
+    cursor = Math.max(cursor, busyEnd);
+  }
+
+  if (cursor < rangeEnd) {
+    let slotStartIso = alignIsoUpToHalfHour(new Date(cursor).toISOString());
+    let slotStart = new Date(slotStartIso).getTime();
+
+    while (slotStart + durationMs <= rangeEnd) {
+      slots.push({
+        start: new Date(slotStart).toISOString(),
+        end: new Date(slotStart + durationMs).toISOString(),
+      });
+      slotStart += stepMs;
+    }
+  }
+
+  return slots;
+}
+
 async function loadConfig() {
   try {
     const fileContents = await fs.readFile(CONFIG_PATH, "utf8");
@@ -753,6 +811,23 @@ async function getCredentials(overrides = {}) {
   }
 
   return { email, password };
+}
+
+async function getEmployeeCredentials(employeeId) {
+  const config = await loadConfig();
+  const employee = config.employees.find((item) => item.id === employeeId);
+
+  if (!employee?.email || !employee?.password) {
+    const error = new Error("Missing employee credentials");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    employee,
+    email: employee.email,
+    password: employee.password,
+  };
 }
 
 async function fetchDav(url, email, password, method, headers = {}, body = undefined) {
@@ -1137,6 +1212,40 @@ async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
   };
 }
 
+async function fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso) {
+  const uniqueEmployeeIds = [...new Set(employeeIds.filter(Boolean))];
+
+  if (uniqueEmployeeIds.length !== 2) {
+    const error = new Error("Exactly two employees are required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const employeeResults = await Promise.all(
+    uniqueEmployeeIds.map(async (employeeId) => {
+      const { employee, email, password } = await getEmployeeCredentials(employeeId);
+      const result = await fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso);
+      return {
+        employee,
+        ...result,
+      };
+    }),
+  );
+
+  const combinedBusy = employeeResults.flatMap((item) => item.busy);
+  const slots = buildMeetingSlotsFromBusy(combinedBusy, rangeStartIso, rangeEndIso, 60, 30);
+
+  return {
+    employees: employeeResults.map((item) => ({
+      id: item.employee.id,
+      name: item.employee.name,
+      email: item.employee.email,
+    })),
+    slots,
+    busy: mergeBusyIntervals(combinedBusy, rangeStartIso, rangeEndIso),
+  };
+}
+
 function serveFile(filePath, response) {
   const contentType =
     filePath.endsWith(".css")
@@ -1382,6 +1491,24 @@ async function handleApi(request, requestUrl, response) {
       return json(response, 200, result);
     } catch (error) {
       return handleCalDavError(response, error, "Не удалось получить данные календаря по CalDAV.");
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/meeting-slots") {
+    const body = await readRequestBody(request);
+    const employeeIds = Array.isArray(body.employeeIds) ? body.employeeIds.map((value) => String(value || "").trim()) : [];
+    const rangeStartIso = String(body.rangeStartIso || "").trim();
+    const rangeEndIso = String(body.rangeEndIso || "").trim();
+
+    if (!rangeStartIso || !rangeEndIso) {
+      return json(response, 400, { error: "Не передан диапазон поиска слотов." });
+    }
+
+    try {
+      const result = await fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso);
+      return json(response, 200, result);
+    } catch (error) {
+      return handleCalDavError(response, error, "Не удалось получить общие слоты встречи.");
     }
   }
 

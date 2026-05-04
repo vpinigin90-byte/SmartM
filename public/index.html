@@ -12,6 +12,7 @@
         <div class="tabs">
           <button class="tab-button active" type="button" data-tab="employees">Сотрудники</button>
           <button class="tab-button" type="button" data-tab="calendar">Календарь</button>
+          <button class="tab-button" type="button" data-tab="client-meeting">Клиент выбирает время для встречи</button>
         </div>
 
         <div class="hero">
@@ -192,6 +193,38 @@
             </div>
             <div id="slots" class="slots empty">
               <p>Пока данных нет.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="client-meeting">
+          <section class="panel">
+            <div class="results-head">
+              <h2>Клиент выбирает время для встречи</h2>
+              <p id="meeting-summary" class="summary">
+                Показываются только слоты, в которых свободны оба выбранных сотрудника. Горизонт показа ограничен 3 днями.
+              </p>
+            </div>
+
+            <div class="toolbar">
+              <label class="field compact-field">
+                <span>Сотрудник 1</span>
+                <select id="meeting-employee-a"></select>
+              </label>
+              <label class="field compact-field">
+                <span>Сотрудник 2</span>
+                <select id="meeting-employee-b"></select>
+              </label>
+            </div>
+
+            <div class="actions">
+              <button id="load-meeting-slots-button" class="primary-button" type="button">
+                Открыть страницу со слотами
+              </button>
+            </div>
+
+            <div id="meeting-slots" class="slots empty">
+              <p>Слоты для клиента ещё не загружены.</p>
             </div>
           </section>
         </section>
