@@ -89,6 +89,9 @@ function renderEmployees() {
             <button class="ghost-button" type="button" data-action="select-employee" data-id="${escapeHtml(employee.id)}">
               Открыть
             </button>
+            <button class="secondary-button danger-button" type="button" data-action="delete-employee" data-id="${escapeHtml(employee.id)}">
+              Удалить
+            </button>
           </div>
         </article>`,
     )
@@ -436,6 +439,24 @@ async function activateEmployee(employeeId) {
   }
 }
 
+async function deleteEmployee(employeeId) {
+  try {
+    const config = await apiRequest("/api/employees", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: employeeId }),
+    });
+    applyEmployeesConfig(config);
+    state.calendars = [];
+    state.events = [];
+    renderCalendars();
+    renderEvents();
+    setStatus("Сотрудник удалён.", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
+}
+
 async function loadCalendars() {
   reloadCalendarsButton.disabled = true;
   try {
@@ -601,12 +622,19 @@ eventsNode.addEventListener("click", async (event) => {
 });
 
 employeesListNode.addEventListener("click", async (event) => {
-  const button = event.target.closest("button[data-action='select-employee']");
+  const button = event.target.closest("button[data-action]");
   if (!button) {
     return;
   }
 
-  await activateEmployee(button.dataset.id);
+  if (button.dataset.action === "select-employee") {
+    await activateEmployee(button.dataset.id);
+    return;
+  }
+
+  if (button.dataset.action === "delete-employee") {
+    await deleteEmployee(button.dataset.id);
+  }
 });
 
 tabButtons.forEach((button) => {

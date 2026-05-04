@@ -307,6 +307,9 @@ button:disabled {
 
 .employee-card-actions {
   margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .employee-badge,

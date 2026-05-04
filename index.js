@@ -1229,6 +1229,26 @@ async function handleApi(request, requestUrl, response) {
     return json(response, 200, nextConfig);
   }
 
+  if (request.method === "DELETE" && requestUrl.pathname === "/api/employees") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request);
+    const employeeId = String(body.id || "").trim();
+
+    if (!employeeId) {
+      return json(response, 400, { error: "Не передан сотрудник для удаления." });
+    }
+
+    const employees = config.employees.filter((employee) => employee.id !== employeeId);
+    const nextConfig = {
+      employees,
+      activeEmployeeId:
+        config.activeEmployeeId === employeeId ? employees[0]?.id || null : config.activeEmployeeId,
+    };
+
+    await saveConfig(nextConfig);
+    return json(response, 200, nextConfig);
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/calendars") {
     try {
       const { email, password } = await getCredentials();
