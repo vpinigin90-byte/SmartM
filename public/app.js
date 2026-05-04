@@ -18,12 +18,9 @@ const loadEventsButton = document.querySelector("#load-events-button");
 const addEmployeeButton = document.querySelector("#add-employee-button");
 const toggleEventFormButton = document.querySelector("#toggle-event-form-button");
 const loadMeetingSlotsButton = document.querySelector("#load-meeting-slots-button");
-const openMeetingRulesButton = document.querySelector("#open-meeting-rules-button");
-const closeMeetingRulesButton = document.querySelector("#close-meeting-rules-button");
 const meetingEmployeeASelect = document.querySelector("#meeting-employee-a");
 const meetingEmployeeBSelect = document.querySelector("#meeting-employee-b");
 const meetingRulesPreviewNode = document.querySelector("#meeting-rules-preview");
-const meetingRulesModal = document.querySelector("#meeting-rules-modal");
 const meetingRulesForm = document.querySelector("#meeting-rules-form");
 const excludedDateInput = document.querySelector("#excluded-date-input");
 const excludedDatesListNode = document.querySelector("#excluded-dates-list");
@@ -59,11 +56,6 @@ const state = {
   eventFormVisible: false,
   sharedMeetingSlots: [],
   meetingRules: {
-    excludedDates: [],
-    allowedStartTime: "09:00",
-    allowedEndTime: "18:00",
-  },
-  meetingRulesDraft: {
     excludedDates: [],
     allowedStartTime: "09:00",
     allowedEndTime: "18:00",
@@ -151,20 +143,15 @@ function renderMeetingEmployeeSelectors() {
       : state.employees[1]?.id || state.employees[0]?.id || "";
 }
 
-function setMeetingRulesModalVisibility(visible) {
-  meetingRulesModal.classList.toggle("hidden-modal", !visible);
-  meetingRulesModal.setAttribute("aria-hidden", visible ? "false" : "true");
-}
-
 function renderExcludedDates() {
-  if (!state.meetingRulesDraft.excludedDates.length) {
+  if (!state.meetingRules.excludedDates.length) {
     excludedDatesListNode.classList.add("empty");
     excludedDatesListNode.innerHTML = "<p>Исключённых дат пока нет.</p>";
     return;
   }
 
   excludedDatesListNode.classList.remove("empty");
-  excludedDatesListNode.innerHTML = state.meetingRulesDraft.excludedDates
+  excludedDatesListNode.innerHTML = state.meetingRules.excludedDates
     .map(
       (date) => `
         <div class="rule-chip">
@@ -180,17 +167,6 @@ function renderMeetingRulesPreview() {
     ? `Исключены даты: ${state.meetingRules.excludedDates.join(", ")}.`
     : "Исключённых дат нет.";
   meetingRulesPreviewNode.innerHTML = `<p>${excludedDatesText} Разрешённое время: ${escapeHtml(state.meetingRules.allowedStartTime)}-${escapeHtml(state.meetingRules.allowedEndTime)}.</p>`;
-}
-
-function resetMeetingRulesDraft() {
-  state.meetingRulesDraft = {
-    excludedDates: [...state.meetingRules.excludedDates],
-    allowedStartTime: state.meetingRules.allowedStartTime,
-    allowedEndTime: state.meetingRules.allowedEndTime,
-  };
-  allowedStartTimeInput.value = state.meetingRulesDraft.allowedStartTime;
-  allowedEndTimeInput.value = state.meetingRulesDraft.allowedEndTime;
-  renderExcludedDates();
 }
 
 function fillEmployeeForm(employee = null) {
@@ -687,22 +663,20 @@ function addExcludedDate() {
     return;
   }
 
-  if (!state.meetingRulesDraft.excludedDates.includes(value)) {
-    state.meetingRulesDraft.excludedDates = [...state.meetingRulesDraft.excludedDates, value].sort();
+  if (!state.meetingRules.excludedDates.includes(value)) {
+    state.meetingRules.excludedDates = [...state.meetingRules.excludedDates, value].sort();
   }
 
   excludedDateInput.value = "";
   renderExcludedDates();
+  renderMeetingRulesPreview();
 }
 
 function applyMeetingRules() {
-  state.meetingRules = {
-    excludedDates: [...state.meetingRulesDraft.excludedDates],
-    allowedStartTime: allowedStartTimeInput.value || "09:00",
-    allowedEndTime: allowedEndTimeInput.value || "18:00",
-  };
+  state.meetingRules.allowedStartTime = allowedStartTimeInput.value || "09:00";
+  state.meetingRules.allowedEndTime = allowedEndTimeInput.value || "18:00";
   renderMeetingRulesPreview();
-  setMeetingRulesModalVisibility(false);
+  setStatus("Ограничения применены.", "success");
 }
 
 async function checkSlots() {
@@ -807,14 +781,6 @@ reloadCalendarsButton.addEventListener("click", loadCalendars);
 loadEventsButton.addEventListener("click", loadEvents);
 addEmployeeButton.addEventListener("click", startNewEmployee);
 loadMeetingSlotsButton.addEventListener("click", loadSharedMeetingSlots);
-openMeetingRulesButton.addEventListener("click", () => {
-  resetMeetingRulesDraft();
-  setMeetingRulesModalVisibility(true);
-});
-closeMeetingRulesButton.addEventListener("click", () => {
-  resetMeetingRulesDraft();
-  setMeetingRulesModalVisibility(false);
-});
 addExcludedDateButton.addEventListener("click", addExcludedDate);
 toggleEventFormButton.addEventListener("click", () => {
   setEventFormVisibility(!state.eventFormVisible);
@@ -866,18 +832,11 @@ excludedDatesListNode.addEventListener("click", (event) => {
     return;
   }
 
-  state.meetingRulesDraft.excludedDates = state.meetingRulesDraft.excludedDates.filter(
+  state.meetingRules.excludedDates = state.meetingRules.excludedDates.filter(
     (date) => date !== button.dataset.date,
   );
   renderExcludedDates();
-});
-
-meetingRulesModal.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-close-modal='true']");
-  if (button) {
-    resetMeetingRulesDraft();
-    setMeetingRulesModalVisibility(false);
-  }
+  renderMeetingRulesPreview();
 });
 
 tabButtons.forEach((button) => {
@@ -895,8 +854,8 @@ resetEventForm();
 setEventFormVisibility(false);
 renderExcludedDates();
 renderMeetingRulesPreview();
-resetMeetingRulesDraft();
-setMeetingRulesModalVisibility(false);
+allowedStartTimeInput.value = state.meetingRules.allowedStartTime;
+allowedEndTimeInput.value = state.meetingRules.allowedEndTime;
 
 loadEmployees()
   .then(() => {

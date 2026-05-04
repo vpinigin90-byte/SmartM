@@ -217,17 +217,56 @@
               </label>
             </div>
 
-            <div class="actions">
-              <button id="open-meeting-rules-button" class="ghost-button" type="button">
-                Ограничения
-              </button>
-              <button id="load-meeting-slots-button" class="primary-button" type="button">
-                Открыть страницу со слотами
-              </button>
-            </div>
+            <section class="inline-rules">
+              <div class="results-head">
+                <h2>Ограничения</h2>
+                <p class="summary">
+                  Исключи конкретные даты и задай время, в которое клиенту можно показывать слоты.
+                </p>
+              </div>
+
+              <form id="meeting-rules-form" class="form">
+                <label class="field">
+                  <span>Исключить дату</span>
+                  <div class="toolbar">
+                    <input id="excluded-date-input" type="date" />
+                    <button id="add-excluded-date-button" class="secondary-button" type="button">
+                      Добавить дату
+                    </button>
+                  </div>
+                </label>
+
+                <div id="excluded-dates-list" class="rules-list empty">
+                  <p>Исключённых дат пока нет.</p>
+                </div>
+
+                <div class="split">
+                  <label class="field">
+                    <span>Начало доступного времени</span>
+                    <input id="allowed-start-time" type="time" value="09:00" />
+                  </label>
+                  <label class="field">
+                    <span>Конец доступного времени</span>
+                    <input id="allowed-end-time" type="time" value="18:00" />
+                  </label>
+                </div>
+
+                <div class="actions">
+                  <button id="save-meeting-rules-button" class="primary-button" type="submit">
+                    Применить ограничения
+                  </button>
+                </div>
+              </form>
+            </section>
 
             <div id="meeting-rules-preview" class="rules-preview">
               <p>Без дополнительных ограничений.</p>
+            </div>
+
+            <div class="actions">
+              <button id="load-meeting-slots-button" class="primary-button" type="button">
+                Открыть страницу со слотами
+              </button>
             </div>
 
             <div id="meeting-slots" class="slots empty">
@@ -237,49 +276,6 @@
         </section>
       </section>
     </main>
-
-    <div id="meeting-rules-modal" class="modal hidden-modal" aria-hidden="true">
-      <div class="modal-backdrop" data-close-modal="true"></div>
-      <div class="modal-dialog">
-        <div class="results-head">
-          <h2>Ограничения выбора</h2>
-          <button id="close-meeting-rules-button" class="ghost-button" type="button">Закрыть</button>
-        </div>
-
-        <form id="meeting-rules-form" class="form">
-          <label class="field">
-            <span>Исключить дату</span>
-            <div class="toolbar">
-              <input id="excluded-date-input" type="date" />
-              <button id="add-excluded-date-button" class="secondary-button" type="button">
-                Добавить дату
-              </button>
-            </div>
-          </label>
-
-          <div id="excluded-dates-list" class="rules-list empty">
-            <p>Исключённых дат пока нет.</p>
-          </div>
-
-          <div class="split">
-            <label class="field">
-              <span>Начало доступного времени</span>
-              <input id="allowed-start-time" type="time" value="09:00" />
-            </label>
-            <label class="field">
-              <span>Конец доступного времени</span>
-              <input id="allowed-end-time" type="time" value="18:00" />
-            </label>
-          </div>
-
-          <div class="actions">
-            <button id="save-meeting-rules-button" class="primary-button" type="submit">
-              Применить ограничения
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
 
     <script src="/app.js"></script>
   </body>
