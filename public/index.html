@@ -11,10 +11,10 @@
       <section class="card">
         <div class="hero">
           <p class="eyebrow">SmartM</p>
-          <h1>Свободные слоты Mail.ru по CalDAV</h1>
+          <h1>Mail.ru CalDAV Client</h1>
           <p class="lead">
-            Укажите e-mail и специальный пароль для внешнего приложения. Сервис сохранит
-            данные и покажет свободные окна на ближайшие 14 дней по всем доступным календарям.
+            Одна страница для хранения учётных данных, просмотра свободных слотов, чтения
+            событий и базового управления календарём через CalDAV.
           </p>
         </div>
 
@@ -45,10 +45,89 @@
             <button id="check-button" class="secondary-button" type="button">
               Проверить доступные слоты
             </button>
+            <button id="reload-calendars-button" class="ghost-button" type="button">
+              Обновить календари
+            </button>
           </div>
         </form>
 
         <div id="status" class="status" aria-live="polite"></div>
+
+        <section class="workspace">
+          <section class="panel">
+            <div class="results-head">
+              <h2>Календари и события</h2>
+              <p id="events-summary" class="summary">
+                Загрузите календари и события, чтобы создавать, редактировать и удалять встречи.
+              </p>
+            </div>
+
+            <div class="toolbar">
+              <label class="field compact-field">
+                <span>Календарь для новых событий</span>
+                <select id="calendar-select"></select>
+              </label>
+              <button id="load-events-button" class="secondary-button" type="button">
+                Загрузить события
+              </button>
+            </div>
+
+            <div id="events" class="events empty">
+              <p>События ещё не загружены.</p>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="results-head">
+              <h2>Событие</h2>
+              <p class="summary">
+                Базовый CRUD для встреч CalDAV. Для сложных повторяющихся серий понадобится
+                отдельная доработка.
+              </p>
+            </div>
+
+            <form id="event-form" class="form">
+              <input id="event-url" type="hidden" />
+              <input id="event-uid" type="hidden" />
+              <input id="event-etag" type="hidden" />
+
+              <label class="field">
+                <span>Тема</span>
+                <input id="event-summary" type="text" placeholder="Встреча" required />
+              </label>
+
+              <div class="split">
+                <label class="field">
+                  <span>Начало</span>
+                  <input id="event-start" type="datetime-local" required />
+                </label>
+                <label class="field">
+                  <span>Конец</span>
+                  <input id="event-end" type="datetime-local" required />
+                </label>
+              </div>
+
+              <label class="field">
+                <span>Локация</span>
+                <input id="event-location" type="text" placeholder="Переговорка / Zoom" />
+              </label>
+
+              <label class="field">
+                <span>Описание</span>
+                <textarea id="event-description" rows="4" placeholder="Комментарий к событию"></textarea>
+              </label>
+
+              <div class="actions">
+                <button id="event-submit-button" class="primary-button" type="submit">
+                  Создать событие
+                </button>
+                <button id="event-reset-button" class="ghost-button" type="button">
+                  Очистить форму
+                </button>
+              </div>
+            </form>
+          </section>
+        </section>
 
         <section class="results">
           <div class="results-head">

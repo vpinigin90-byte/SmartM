@@ -1,6 +1,7 @@
 const fs = require("fs/promises");
 const http = require("http");
 const path = require("path");
+const crypto = require("crypto");
 const { URL } = require("url");
 
 const HOST = "0.0.0.0";
@@ -37,6 +38,24 @@ function decodeXml(value) {
     .replaceAll("&gt;", ">")
     .replaceAll("&quot;", '"')
     .replaceAll("&#39;", "'");
+}
+
+function escapeXml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function escapeIcsText(value) {
+  return String(value || "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll(";", "\\;")
+    .replaceAll(",", "\\,")
+    .replaceAll("\r\n", "\\n")
+    .replaceAll("\n", "\\n");
 }
 
 function stripXml(value) {
@@ -231,7 +250,7 @@ function parsePeriodToInterval(value) {
   };
 }
 
-function parseCalendarData(calendarData, calendarName, calendarUrl) {
+function parseCalendarData(calendarData, calendarName, calendarUrl, metadata = {}) {
   const unfolded = unfoldIcsLines(calendarData);
   const eventMatches = [...unfolded.matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/g)];
   const events = [];
@@ -275,7 +294,7 @@ function parseCalendarData(calendarData, calendarName, calendarUrl) {
     const endEntry = properties.DTEND?.[0];
     const durationEntry = properties.DURATION?.[0];
 
-    if (!startEntry || status === "CANCELLED" || transparency === "TRANSPARENT") {
+    if (!startEntry || status === "CANCELLED") {
       continue;
     }
 
@@ -309,11 +328,18 @@ function parseCalendarData(calendarData, calendarName, calendarUrl) {
     events.push({
       calendarName,
       calendarUrl,
+      eventUrl: metadata.eventUrl || null,
+      etag: metadata.etag || null,
       uid: properties.UID?.[0]?.value || null,
       summary: properties.SUMMARY?.[0]?.value || "Busy",
+      description: properties.DESCRIPTION?.[0]?.value || "",
+      location: properties.LOCATION?.[0]?.value || "",
       start: start.iso,
       end: end.iso,
       isAllDay: start.isDateOnly,
+      recurrenceId: properties["RECURRENCE-ID"]?.[0]?.value || null,
+      status,
+      transparency,
     });
   }
 
@@ -340,6 +366,50 @@ function parseFreeBusyData(calendarData) {
   }
 
   return intervals;
+}
+
+function getEventBusyIntervals(events) {
+  return events
+    .filter((event) => event.transparency !== "TRANSPARENT")
+    .map((event) => ({ start: event.start, end: event.end }));
+}
+
+function formatIcsDateTime(isoString) {
+  return new Date(isoString).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function buildEventIcs(eventData) {
+  const uid = eventData.uid || crypto.randomUUID();
+  const dtStamp = formatIcsDateTime(new Date().toISOString());
+  const dtStart = formatIcsDateTime(eventData.start);
+  const dtEnd = formatIcsDateTime(eventData.end);
+  const summary = escapeIcsText(eventData.summary || "New event");
+  const description = escapeIcsText(eventData.description || "");
+  const location = escapeIcsText(eventData.location || "");
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//SmartM//CalDAV Client//RU",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${summary}`,
+  ];
+
+  if (description) {
+    lines.push(`DESCRIPTION:${description}`);
+  }
+
+  if (location) {
+    lines.push(`LOCATION:${location}`);
+  }
+
+  lines.push("END:VEVENT", "END:VCALENDAR", "");
+  return lines.join("\r\n");
 }
 
 function mergeBusyIntervals(events, rangeStartIso, rangeEndIso) {
@@ -405,6 +475,20 @@ async function readRequestBody(request) {
   }
 
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+async function getCredentials(overrides = {}) {
+  const storedConfig = await loadConfig();
+  const email = String(overrides.email || storedConfig.email || "").trim();
+  const password = String(overrides.password || storedConfig.password || "").trim();
+
+  if (!email || !password) {
+    const error = new Error("Missing credentials");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return { email, password };
 }
 
 async function fetchDav(url, email, password, method, headers = {}, body = undefined) {
@@ -544,6 +628,11 @@ async function fetchCalendars(email, password, homeUrl) {
   return calendars;
 }
 
+async function getCalendarsForUser(email, password) {
+  const homeUrl = await discoverCalendarHome(email, password);
+  return fetchCalendars(email, password, homeUrl);
+}
+
 async function fetchCalendarEvents(email, password, calendar, rangeStartIso, rangeEndIso) {
   const startUtc = formatUtcForCaldav(rangeStartIso);
   const endUtc = formatUtcForCaldav(rangeEndIso);
@@ -584,10 +673,136 @@ async function fetchCalendarEvents(email, password, calendar, rangeStartIso, ran
       continue;
     }
 
-    events.push(...parseCalendarData(decodeXml(calendarData), calendar.name, calendar.url));
+    const href = findFirstTagValue(responseXml, "href");
+    const etag = stripXml(findFirstTagValue(responseXml, "getetag") || "");
+    const eventUrl = href ? resolveHref(response.url, stripXml(href)) : calendar.url;
+
+    events.push(
+      ...parseCalendarData(decodeXml(calendarData), calendar.name, calendar.url, {
+        eventUrl,
+        etag: etag || null,
+      }),
+    );
   }
 
   return events;
+}
+
+async function fetchEventsAcrossCalendars(email, password, rangeStartIso, rangeEndIso) {
+  const calendars = await getCalendarsForUser(email, password);
+  const perCalendarEvents = await Promise.all(
+    calendars.map((calendar) =>
+      fetchCalendarEvents(email, password, calendar, rangeStartIso, rangeEndIso).catch(() => []),
+    ),
+  );
+
+  return {
+    calendars,
+    events: perCalendarEvents
+      .flat()
+      .sort((left, right) => new Date(left.start) - new Date(right.start)),
+  };
+}
+
+async function putCalendarObject(email, password, eventUrl, eventIcs, options = {}) {
+  const headers = {
+    Authorization: basicAuthHeader(email, password),
+    "Content-Type": "text/calendar; charset=utf-8",
+    "User-Agent": "SmartM CalDAV Client/1.0",
+  };
+
+  if (options.ifNoneMatch) {
+    headers["If-None-Match"] = "*";
+  } else if (options.etag) {
+    headers["If-Match"] = options.etag;
+  }
+
+  const response = await fetch(eventUrl, {
+    method: "PUT",
+    headers,
+    body: eventIcs,
+  });
+
+  const text = await response.text();
+  if (!response.ok && response.status !== 201 && response.status !== 204) {
+    const error = new Error(`PUT failed with status ${response.status}`);
+    error.statusCode = response.status;
+    error.responseText = text;
+    throw error;
+  }
+
+  return {
+    ok: true,
+    eventUrl,
+    etag: response.headers.get("etag"),
+  };
+}
+
+async function deleteCalendarObject(email, password, eventUrl, etag = null) {
+  const response = await fetch(eventUrl, {
+    method: "DELETE",
+    headers: {
+      Authorization: basicAuthHeader(email, password),
+      "If-Match": etag || "*",
+      "User-Agent": "SmartM CalDAV Client/1.0",
+    },
+  });
+
+  const text = await response.text();
+  if (!response.ok && response.status !== 204) {
+    const error = new Error(`DELETE failed with status ${response.status}`);
+    error.statusCode = response.status;
+    error.responseText = text;
+    throw error;
+  }
+
+  return { ok: true };
+}
+
+function buildEventUrl(calendarUrl, uid) {
+  return `${ensureTrailingSlash(calendarUrl)}${uid}.ics`;
+}
+
+function normalizeEventPayload(body) {
+  const calendarUrl = String(body.calendarUrl || "").trim();
+  const summary = String(body.summary || "").trim();
+  const description = String(body.description || "").trim();
+  const location = String(body.location || "").trim();
+  const start = String(body.start || body.startIso || "").trim();
+  const end = String(body.end || body.endIso || "").trim();
+  const uid = String(body.uid || "").trim() || null;
+  const eventUrl = String(body.eventUrl || "").trim() || null;
+  const etag = String(body.etag || "").trim() || null;
+
+  if (!summary || !start || !end) {
+    const error = new Error("Missing event fields");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) {
+    const error = new Error("Invalid event dates");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (new Date(end) <= new Date(start)) {
+    const error = new Error("Invalid event interval");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    calendarUrl,
+    summary,
+    description,
+    location,
+    start,
+    end,
+    uid,
+    eventUrl,
+    etag,
+  };
 }
 
 async function fetchCalendarBusyIntervals(email, password, calendar, rangeStartIso, rangeEndIso) {
@@ -613,8 +828,7 @@ async function fetchCalendarBusyIntervals(email, password, calendar, rangeStartI
 }
 
 async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
-  const homeUrl = await discoverCalendarHome(email, password);
-  const calendars = await fetchCalendars(email, password, homeUrl);
+  const calendars = await getCalendarsForUser(email, password);
 
   if (calendars.length === 0) {
     return {
@@ -640,7 +854,11 @@ async function fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso) {
   return {
     calendars,
     events: allEvents.sort((left, right) => new Date(left.start) - new Date(right.start)),
-    busy: mergeBusyIntervals([...allBusyIntervals, ...allEvents], rangeStartIso, rangeEndIso),
+    busy: mergeBusyIntervals(
+      [...allBusyIntervals, ...getEventBusyIntervals(allEvents)],
+      rangeStartIso,
+      rangeEndIso,
+    ),
   };
 }
 
@@ -664,13 +882,33 @@ function serveFile(filePath, response) {
     });
 }
 
-async function handleApi(request, response) {
-  if (request.method === "GET" && request.url === "/api/config") {
+function handleCalDavError(response, error, fallbackMessage) {
+  const statusCode =
+    error.statusCode === 400
+      ? 400
+      : error.statusCode === 401 || error.statusCode === 403
+        ? 401
+        : 500;
+  const message =
+    statusCode === 400
+      ? fallbackMessage
+      : statusCode === 401
+        ? "Mail.ru отклонил авторизацию. Проверьте e-mail и специальный пароль для внешнего приложения."
+        : "Не удалось выполнить CalDAV-операцию.";
+
+  return json(response, statusCode, {
+    error: message,
+    details: error.responseText ? error.responseText.slice(0, 1200) : error.message,
+  });
+}
+
+async function handleApi(request, requestUrl, response) {
+  if (request.method === "GET" && requestUrl.pathname === "/api/config") {
     const config = await loadConfig();
     return json(response, 200, config);
   }
 
-  if (request.method === "POST" && request.url === "/api/config") {
+  if (request.method === "POST" && requestUrl.pathname === "/api/config") {
     const body = await readRequestBody(request);
     const email = String(body.email || "").trim();
     const password = String(body.password || "").trim();
@@ -683,36 +921,111 @@ async function handleApi(request, response) {
     return json(response, 200, { ok: true });
   }
 
-  if (request.method === "POST" && request.url === "/api/slots") {
+  if (request.method === "GET" && requestUrl.pathname === "/api/calendars") {
+    try {
+      const { email, password } = await getCredentials();
+      const calendars = await getCalendarsForUser(email, password);
+      return json(response, 200, { calendars });
+    } catch (error) {
+      return handleCalDavError(response, error, "Не удалось получить список календарей.");
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/events") {
+    const rangeStartIso = String(requestUrl.searchParams.get("rangeStartIso") || "").trim();
+    const rangeEndIso = String(requestUrl.searchParams.get("rangeEndIso") || "").trim();
+
+    if (!rangeStartIso || !rangeEndIso) {
+      return json(response, 400, { error: "Передайте rangeStartIso и rangeEndIso." });
+    }
+
+    try {
+      const { email, password } = await getCredentials();
+      const result = await fetchEventsAcrossCalendars(email, password, rangeStartIso, rangeEndIso);
+      return json(response, 200, result);
+    } catch (error) {
+      return handleCalDavError(response, error, "Не удалось получить события.");
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/events") {
+    try {
+      const body = readRequestBody(request);
+      const [{ email, password }, eventData] = await Promise.all([getCredentials(), body.then(normalizeEventPayload)]);
+
+      if (!eventData.calendarUrl) {
+        return json(response, 400, { error: "Выберите календарь для создания события." });
+      }
+
+      const eventUrl = buildEventUrl(eventData.calendarUrl, eventData.uid || crypto.randomUUID());
+      const eventIcs = buildEventIcs({ ...eventData, uid: eventData.uid || path.basename(eventUrl, ".ics") });
+      const result = await putCalendarObject(email, password, eventUrl, eventIcs, { ifNoneMatch: true });
+      return json(response, 201, { ok: true, ...result });
+    } catch (error) {
+      return handleCalDavError(response, error, "Не удалось создать событие.");
+    }
+  }
+
+  if (request.method === "PUT" && requestUrl.pathname === "/api/events") {
+    try {
+      const body = await readRequestBody(request);
+      const { email, password } = await getCredentials();
+      const eventData = normalizeEventPayload(body);
+
+      if (!eventData.eventUrl) {
+        return json(response, 400, { error: "Для обновления нужен eventUrl." });
+      }
+
+      const eventIcs = buildEventIcs({
+        ...eventData,
+        uid: eventData.uid || path.basename(eventData.eventUrl, ".ics"),
+      });
+      const result = await putCalendarObject(
+        email,
+        password,
+        eventData.eventUrl,
+        eventIcs,
+        { etag: eventData.etag },
+      );
+      return json(response, 200, { ok: true, ...result });
+    } catch (error) {
+      return handleCalDavError(response, error, "Не удалось обновить событие.");
+    }
+  }
+
+  if (request.method === "DELETE" && requestUrl.pathname === "/api/events") {
+    try {
+      const body = await readRequestBody(request);
+      const { email, password } = await getCredentials();
+      const eventUrl = String(body.eventUrl || "").trim();
+      const etag = String(body.etag || "").trim() || null;
+
+      if (!eventUrl) {
+        return json(response, 400, { error: "Для удаления нужен eventUrl." });
+      }
+
+      const result = await deleteCalendarObject(email, password, eventUrl, etag);
+      return json(response, 200, result);
+    } catch (error) {
+      return handleCalDavError(response, error, "Не удалось удалить событие.");
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/slots") {
     const body = await readRequestBody(request);
-    const storedConfig = await loadConfig();
-    const email = String(body.email || storedConfig.email || "").trim();
-    const password = String(body.password || storedConfig.password || "").trim();
     const rangeStartIso = String(body.rangeStartIso || "").trim();
     const rangeEndIso = String(body.rangeEndIso || "").trim();
-
-    if (!email || !password) {
-      return json(response, 400, { error: "Сначала сохраните e-mail и пароль для внешнего приложения." });
-    }
 
     if (!rangeStartIso || !rangeEndIso) {
       return json(response, 400, { error: "Не передан диапазон поиска слотов." });
     }
 
     try {
+      const { email, password } = await getCredentials(body);
       const result = await fetchBusyIntervals(email, password, rangeStartIso, rangeEndIso);
       return json(response, 200, result);
     } catch (error) {
-      const statusCode = error.statusCode === 401 || error.statusCode === 403 ? 401 : 500;
-      const message =
-        statusCode === 401
-          ? "Mail.ru отклонил авторизацию. Проверьте e-mail и специальный пароль для внешнего приложения."
-          : "Не удалось получить данные календаря по CalDAV.";
-
-      return json(response, statusCode, {
-        error: message,
-        details: error.responseText ? error.responseText.slice(0, 1000) : error.message,
-      });
+      return handleCalDavError(response, error, "Не удалось получить данные календаря по CalDAV.");
     }
   }
 
@@ -725,7 +1038,7 @@ const server = http.createServer(async (request, response) => {
     const requestUrl = new URL(request.url, `http://${request.headers.host}`);
 
     if (requestUrl.pathname.startsWith("/api/")) {
-      await handleApi(request, response);
+      await handleApi(request, requestUrl, response);
       return;
     }
 
