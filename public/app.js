@@ -63,6 +63,11 @@ const state = {
     allowedStartTime: "09:00",
     allowedEndTime: "18:00",
   },
+  meetingRulesDraft: {
+    excludedDates: [],
+    allowedStartTime: "09:00",
+    allowedEndTime: "18:00",
+  },
 };
 
 function setStatus(message, kind = "") {
@@ -152,14 +157,14 @@ function setMeetingRulesModalVisibility(visible) {
 }
 
 function renderExcludedDates() {
-  if (!state.meetingRules.excludedDates.length) {
+  if (!state.meetingRulesDraft.excludedDates.length) {
     excludedDatesListNode.classList.add("empty");
     excludedDatesListNode.innerHTML = "<p>Исключённых дат пока нет.</p>";
     return;
   }
 
   excludedDatesListNode.classList.remove("empty");
-  excludedDatesListNode.innerHTML = state.meetingRules.excludedDates
+  excludedDatesListNode.innerHTML = state.meetingRulesDraft.excludedDates
     .map(
       (date) => `
         <div class="rule-chip">
@@ -175,6 +180,17 @@ function renderMeetingRulesPreview() {
     ? `Исключены даты: ${state.meetingRules.excludedDates.join(", ")}.`
     : "Исключённых дат нет.";
   meetingRulesPreviewNode.innerHTML = `<p>${excludedDatesText} Разрешённое время: ${escapeHtml(state.meetingRules.allowedStartTime)}-${escapeHtml(state.meetingRules.allowedEndTime)}.</p>`;
+}
+
+function resetMeetingRulesDraft() {
+  state.meetingRulesDraft = {
+    excludedDates: [...state.meetingRules.excludedDates],
+    allowedStartTime: state.meetingRules.allowedStartTime,
+    allowedEndTime: state.meetingRules.allowedEndTime,
+  };
+  allowedStartTimeInput.value = state.meetingRulesDraft.allowedStartTime;
+  allowedEndTimeInput.value = state.meetingRulesDraft.allowedEndTime;
+  renderExcludedDates();
 }
 
 function fillEmployeeForm(employee = null) {
@@ -671,18 +687,20 @@ function addExcludedDate() {
     return;
   }
 
-  if (!state.meetingRules.excludedDates.includes(value)) {
-    state.meetingRules.excludedDates = [...state.meetingRules.excludedDates, value].sort();
+  if (!state.meetingRulesDraft.excludedDates.includes(value)) {
+    state.meetingRulesDraft.excludedDates = [...state.meetingRulesDraft.excludedDates, value].sort();
   }
 
   excludedDateInput.value = "";
   renderExcludedDates();
-  renderMeetingRulesPreview();
 }
 
 function applyMeetingRules() {
-  state.meetingRules.allowedStartTime = allowedStartTimeInput.value || "09:00";
-  state.meetingRules.allowedEndTime = allowedEndTimeInput.value || "18:00";
+  state.meetingRules = {
+    excludedDates: [...state.meetingRulesDraft.excludedDates],
+    allowedStartTime: allowedStartTimeInput.value || "09:00",
+    allowedEndTime: allowedEndTimeInput.value || "18:00",
+  };
   renderMeetingRulesPreview();
   setMeetingRulesModalVisibility(false);
 }
@@ -789,8 +807,14 @@ reloadCalendarsButton.addEventListener("click", loadCalendars);
 loadEventsButton.addEventListener("click", loadEvents);
 addEmployeeButton.addEventListener("click", startNewEmployee);
 loadMeetingSlotsButton.addEventListener("click", loadSharedMeetingSlots);
-openMeetingRulesButton.addEventListener("click", () => setMeetingRulesModalVisibility(true));
-closeMeetingRulesButton.addEventListener("click", () => setMeetingRulesModalVisibility(false));
+openMeetingRulesButton.addEventListener("click", () => {
+  resetMeetingRulesDraft();
+  setMeetingRulesModalVisibility(true);
+});
+closeMeetingRulesButton.addEventListener("click", () => {
+  resetMeetingRulesDraft();
+  setMeetingRulesModalVisibility(false);
+});
 addExcludedDateButton.addEventListener("click", addExcludedDate);
 toggleEventFormButton.addEventListener("click", () => {
   setEventFormVisibility(!state.eventFormVisible);
@@ -842,16 +866,16 @@ excludedDatesListNode.addEventListener("click", (event) => {
     return;
   }
 
-  state.meetingRules.excludedDates = state.meetingRules.excludedDates.filter(
+  state.meetingRulesDraft.excludedDates = state.meetingRulesDraft.excludedDates.filter(
     (date) => date !== button.dataset.date,
   );
   renderExcludedDates();
-  renderMeetingRulesPreview();
 });
 
 meetingRulesModal.addEventListener("click", (event) => {
   const button = event.target.closest("[data-close-modal='true']");
   if (button) {
+    resetMeetingRulesDraft();
     setMeetingRulesModalVisibility(false);
   }
 });
@@ -871,6 +895,7 @@ resetEventForm();
 setEventFormVisibility(false);
 renderExcludedDates();
 renderMeetingRulesPreview();
+resetMeetingRulesDraft();
 setMeetingRulesModalVisibility(false);
 
 loadEmployees()
