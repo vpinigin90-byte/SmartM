@@ -9,24 +9,53 @@
   <body>
     <main class="shell">
       <section class="card">
-        <div class="tabs">
-          <button class="tab-button active" type="button" data-tab="employees">Сотрудники</button>
-          <button class="tab-button" type="button" data-tab="calendar">Календарь</button>
-          <button class="tab-button" type="button" data-tab="client-meeting">Клиент выбирает время для встречи</button>
+        <header class="app-header">
+          <div class="brand-lockup">
+            <div class="brand-mark" aria-hidden="true">SM</div>
+            <div>
+              <p class="eyebrow">SmartM</p>
+              <h1>Панель управления встречами</h1>
+            </div>
+          </div>
+          <div class="header-actions" aria-label="Интеграции">
+            <span class="status-pill">Mail.ru CalDAV</span>
+            <span class="status-pill muted-pill">Без внешних зависимостей</span>
+          </div>
+        </header>
+
+        <div class="tabs" role="tablist" aria-label="Разделы SmartM">
+          <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="employees">Сотрудники</button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="calendar">Календарь</button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="client-meeting">Клиент выбирает время для встречи</button>
         </div>
 
         <div class="hero">
-          <p class="eyebrow">SmartM</p>
-          <h1>Mail.ru CalDAV Client</h1>
           <p class="lead">
             Одна страница для хранения учётных данных сотрудников, просмотра свободных
             слотов, чтения событий и базового управления календарём через CalDAV.
           </p>
+          <div class="overview-grid" aria-label="Возможности">
+            <article class="overview-card">
+              <span>01</span>
+              <strong>Сотрудники</strong>
+              <p>Профили с активным исполнителем для запросов к календарю.</p>
+            </article>
+            <article class="overview-card">
+              <span>02</span>
+              <strong>Слоты</strong>
+              <p>Свободные интервалы и занятые события в одном представлении.</p>
+            </article>
+            <article class="overview-card">
+              <span>03</span>
+              <strong>Клиентская встреча</strong>
+              <p>Общие окна двух сотрудников с ограничениями по датам и времени.</p>
+            </article>
+          </div>
         </div>
 
         <div id="status" class="status" aria-live="polite"></div>
 
-        <section class="tab-panel active" data-tab-panel="employees">
+        <section class="tab-panel active" role="tabpanel" data-tab-panel="employees">
           <section class="employees-layout">
             <section class="panel">
               <div class="results-head">
@@ -101,7 +130,7 @@
           </section>
         </section>
 
-        <section class="tab-panel" data-tab-panel="calendar">
+        <section class="tab-panel" role="tabpanel" data-tab-panel="calendar">
           <section class="workspace">
             <section class="panel">
               <div class="results-head">
@@ -197,7 +226,7 @@
           </section>
         </section>
 
-        <section class="tab-panel" data-tab-panel="client-meeting">
+        <section class="tab-panel" role="tabpanel" data-tab-panel="client-meeting">
           <section class="panel">
             <div class="results-head">
               <h2>Клиент выбирает время для встречи</h2>
