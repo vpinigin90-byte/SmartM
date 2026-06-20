@@ -3,53 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartM Demo Booking</title>
+    <title>Scrolltool Demo Booking</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="booking-page">
     <main class="booking-shell">
       <section class="booking-hero">
         <div class="booking-copy">
-          <div class="brand-lockup">
-            <div class="brand-mark" aria-hidden="true">SM</div>
-            <div>
-              <p class="eyebrow">SmartM</p>
-              <h1>Выберите время для демонстрации сервиса</h1>
-            </div>
-          </div>
+          <h1>Выберите время для встречи</h1>
           <p class="booking-lead">
-            Показываем только свободные окна команды. После записи встреча появится в календаре,
-            а на указанный e-mail будет добавлен участник события.
+            Выберите любое время, укажите почту и нажмите Забронировать. Встреча будет
+            отправлена к вам на почту и появится в разделе «Календарь».
           </p>
         </div>
 
         <section class="booking-panel smartm-widget" aria-labelledby="booking-title">
-          <ol class="booking-steps" aria-label="Шаги бронирования">
-            <li class="booking-step active" data-step-indicator="date"><span>1</span>Дата</li>
-            <li class="booking-step" data-step-indicator="time"><span>2</span>Время</li>
-            <li class="booking-step" data-step-indicator="details"><span>3</span>Данные</li>
-          </ol>
-
-          <div class="results-head">
-            <div>
-              <h2 id="booking-title">Выберите дату</h2>
-              <p id="booking-summary" class="summary">Сначала выберите удобный день, затем время демо.</p>
-            </div>
-            <button id="refresh-slots-button" class="ghost-button" type="button">Обновить</button>
-          </div>
-
           <div id="booking-status" class="status" aria-live="polite"></div>
+
+          <div class="results-head booking-results-head">
+            <div class="booking-title-row">
+              <h2 id="booking-title">Выберите дату</h2>
+              <button id="refresh-slots-button" class="text-action-button" type="button">Обновить</button>
+            </div>
+          </div>
+          <div id="selected-date-panel" class="selected-date-panel hidden-panel">
+            <span id="selected-date-summary" class="selected-date-label"></span>
+            <button
+              id="change-date-button"
+              class="icon-action-button"
+              type="button"
+              title="изменить дату"
+              aria-label="изменить дату"
+            >
+              <span aria-hidden="true">✎</span>
+            </button>
+          </div>
           <div id="public-dates" class="date-grid empty">
             <p>Даты загружаются.</p>
           </div>
           <div id="public-slots-panel" class="slots-panel hidden-panel">
-            <div class="results-head compact-head">
-              <div>
-                <h3>Доступное время</h3>
-                <p id="selected-date-summary" class="summary"></p>
-              </div>
-              <button id="change-date-button" class="ghost-button" type="button">Другая дата</button>
-            </div>
             <div id="public-slots" class="time-grid empty">
               <p>Выберите дату.</p>
             </div>
@@ -58,72 +50,101 @@
       </section>
 
       <section id="booking-form-panel" class="booking-panel hidden-panel" aria-labelledby="client-form-title">
-        <div class="results-head">
+        <div class="results-head booking-form-head">
           <div>
-            <h2 id="client-form-title">Данные для приглашения</h2>
-            <p id="selected-slot-summary" class="summary"></p>
+            <h2 id="client-form-title">Данные для бронирования встречи</h2>
+            <div class="selected-slot-row">
+              <p id="selected-slot-summary" class="summary"></p>
+              <button
+                id="change-time-button"
+                class="icon-action-button"
+                type="button"
+                title="Изменить время"
+                aria-label="Изменить время"
+              >
+                <span aria-hidden="true">✎</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <form id="booking-form" class="form">
+        <form id="booking-form" class="form booking-form" novalidate>
           <input id="booking-start" type="hidden" />
           <input id="booking-end" type="hidden" />
 
-          <div class="split">
-            <label class="field">
-              <span>Имя</span>
-              <input id="client-name" type="text" autocomplete="name" placeholder="Анна Иванова" required />
-            </label>
-            <label class="field">
-              <span>E-mail</span>
-              <input id="client-email" type="email" autocomplete="email" placeholder="name@example.com" required />
-            </label>
-          </div>
+          <label class="field">
+            <span class="field-label">Имя *</span>
+            <input id="client-first-name" type="text" autocomplete="given-name" placeholder="Анна" required />
+            <small id="client-first-name-error" class="field-error" aria-live="polite"></small>
+          </label>
 
-          <div class="split">
-            <label class="field">
-              <span>Телефон</span>
-              <input id="client-phone" type="tel" autocomplete="tel" placeholder="+7 999 000-00-00" required />
-            </label>
-            <label class="field">
-              <span>Наименование компании</span>
-              <input id="company-name" type="text" autocomplete="organization" placeholder="ООО Scrolltool" required />
-            </label>
-          </div>
+          <label class="field">
+            <span class="field-label">Фамилия *</span>
+            <input id="client-last-name" type="text" autocomplete="family-name" placeholder="Иванова" required />
+            <small id="client-last-name-error" class="field-error" aria-live="polite"></small>
+          </label>
 
-          <div class="split">
-            <label class="field">
-              <span>Должность</span>
-              <select id="client-position" required>
-                <option value="">Выберите должность</option>
-                <option value="Разработчик курсов">Разработчик курсов</option>
-                <option value="Методист онлайн-курсов">Методист онлайн-курсов</option>
-                <option value="Бизнес-тренер">Бизнес-тренер</option>
-                <option value="Руководитель обучения">Руководитель обучения</option>
-                <option value="HR-директор">HR-директор</option>
-                <option value="Другое">Другое</option>
+          <label class="field">
+            <span class="field-label">E-mail *</span>
+            <input id="client-email" type="email" autocomplete="email" inputmode="email" spellcheck="false" placeholder="name@example.com" required />
+            <small id="client-email-error" class="field-error" aria-live="polite"></small>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Телефон *</span>
+            <div class="phone-field">
+              <select id="client-phone-country" class="phone-country" aria-label="Страна номера">
+                <option value="RU">Россия +7</option>
+                <option value="KZ">Казахстан +7</option>
+                <option value="BY">Беларусь +375</option>
+                <option value="UZ">Узбекистан +998</option>
+                <option value="AM">Армения +374</option>
               </select>
-            </label>
-            <label id="custom-position-field" class="field hidden-panel">
-              <span>Своя должность</span>
-              <input id="custom-position" type="text" placeholder="Укажите должность" />
-            </label>
-          </div>
+              <input id="client-phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+7 (999) 000-00-00" required />
+            </div>
+            <small id="client-phone-error" class="field-error" aria-live="polite"></small>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Наименование компании *</span>
+            <input id="company-name" type="text" autocomplete="organization" placeholder="ООО СКРОЛЛ или SCROLLTOOL" required />
+            <small id="company-name-error" class="field-error" aria-live="polite"></small>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Должность *</span>
+            <select id="client-position" required>
+              <option value="" selected disabled hidden>Выберите должность</option>
+              <option value="Разработчик курсов">Разработчик курсов</option>
+              <option value="Методист онлайн-курсов">Методист онлайн-курсов</option>
+              <option value="Бизнес-тренер">Бизнес-тренер</option>
+              <option value="Руководитель обучения">Руководитель обучения</option>
+              <option value="HR-директор">HR-директор</option>
+              <option value="Другое">Другое</option>
+            </select>
+            <input id="custom-position" class="hidden-panel" type="text" placeholder="Укажите должность" />
+            <small id="client-position-error" class="field-error" aria-live="polite"></small>
+            <small id="custom-position-error" class="field-error" aria-live="polite"></small>
+          </label>
 
           <label class="field">
             <span>Добавить других участников встречи</span>
-            <textarea id="additional-attendees" rows="2" placeholder="email1@example.com, email2@example.com"></textarea>
-            <small>Можно указать несколько email через запятую.</small>
+            <input id="additional-attendees" type="text" placeholder="email1@example.com, email2@example.com" />
+            <small>Добавьте ваших коллег, кому тоже важно быть на встрече</small>
           </label>
 
           <label class="field">
             <span>Комментарий</span>
-            <textarea id="client-comment" rows="3" placeholder="Что хотите обсудить на демо"></textarea>
+            <textarea id="client-comment" rows="3" placeholder="Укажите заранее, какие вопросы вы хотите обсудить на встрече и какие возможности приоритетно рассмотреть."></textarea>
           </label>
 
           <div class="actions">
-            <button id="book-slot-button" class="primary-button" type="submit">Забронировать демо</button>
-            <button id="cancel-booking-button" class="ghost-button" type="button">Выбрать другое время</button>
+            <button id="book-slot-button" class="primary-button" type="submit">Забронировать</button>
+            <p class="booking-consent">
+              Нажимая кнопку "Забронировать", я подтверждаю, что принимаю Пользовательское
+              соглашение, даю согласие на обработку и передачу персональных данных в
+              соответствии с Политикой конфиденциальности и использованием cookie.
+            </p>
           </div>
         </form>
       </section>

@@ -2,26 +2,29 @@ const datesNode = document.querySelector("#public-dates");
 const slotsPanel = document.querySelector("#public-slots-panel");
 const slotsNode = document.querySelector("#public-slots");
 const statusNode = document.querySelector("#booking-status");
-const summaryNode = document.querySelector("#booking-summary");
 const selectedDateSummaryNode = document.querySelector("#selected-date-summary");
+const selectedDatePanel = document.querySelector("#selected-date-panel");
 const refreshButton = document.querySelector("#refresh-slots-button");
 const changeDateButton = document.querySelector("#change-date-button");
+const bookingTitleNode = document.querySelector("#booking-title");
+const bookingWidget = document.querySelector(".smartm-widget");
 const formPanel = document.querySelector("#booking-form-panel");
 const form = document.querySelector("#booking-form");
 const startInput = document.querySelector("#booking-start");
 const endInput = document.querySelector("#booking-end");
 const selectedSlotSummaryNode = document.querySelector("#selected-slot-summary");
-const clientNameInput = document.querySelector("#client-name");
+const clientFirstNameInput = document.querySelector("#client-first-name");
+const clientLastNameInput = document.querySelector("#client-last-name");
 const clientEmailInput = document.querySelector("#client-email");
+const clientPhoneCountryInput = document.querySelector("#client-phone-country");
 const clientPhoneInput = document.querySelector("#client-phone");
 const companyNameInput = document.querySelector("#company-name");
 const positionSelect = document.querySelector("#client-position");
-const customPositionField = document.querySelector("#custom-position-field");
 const customPositionInput = document.querySelector("#custom-position");
 const additionalAttendeesInput = document.querySelector("#additional-attendees");
 const clientCommentInput = document.querySelector("#client-comment");
 const bookButton = document.querySelector("#book-slot-button");
-const cancelButton = document.querySelector("#cancel-booking-button");
+const changeTimeButton = document.querySelector("#change-time-button");
 const stepIndicators = [...document.querySelectorAll("[data-step-indicator]")];
 
 const state = {
@@ -30,6 +33,100 @@ const state = {
   selectedDayKey: null,
   selectedSlot: null,
 };
+
+const PHONE_MASKS = {
+  RU: { placeholder: "+7 (999) 000-00-00", countryCode: "7", localLength: 10, trunkPrefix: "8" },
+  KZ: { placeholder: "+7 (999) 000-00-00", countryCode: "7", localLength: 10, trunkPrefix: "8" },
+  BY: { placeholder: "+375 (29) 000-00-00", countryCode: "375", localLength: 9 },
+  UZ: { placeholder: "+998 (90) 000-00-00", countryCode: "998", localLength: 9 },
+  AM: { placeholder: "+374 (10) 000-000", countryCode: "374", localLength: 8 },
+};
+
+const FIELD_ERRORS = {
+  firstName: document.querySelector("#client-first-name-error"),
+  lastName: document.querySelector("#client-last-name-error"),
+  email: document.querySelector("#client-email-error"),
+  phone: document.querySelector("#client-phone-error"),
+  company: document.querySelector("#company-name-error"),
+  position: document.querySelector("#client-position-error"),
+  customPosition: document.querySelector("#custom-position-error"),
+};
+
+
+function setFieldState(input, errorNode, message = "") {
+  const field = input.closest(".field");
+  field?.classList.toggle("invalid", Boolean(message));
+  if (errorNode) {
+    errorNode.textContent = message;
+  }
+}
+
+function validateRequiredText(input, errorNode, message) {
+  const value = input.value.trim();
+  const error = value ? "" : message;
+  setFieldState(input, errorNode, error);
+  return !error;
+}
+
+function validateEmailField() {
+  const email = clientEmailInput.value.trim();
+  let error = "";
+  if (!email) {
+    error = "Укажите e-mail.";
+  } else if (!isValidEmail(email)) {
+    error = "Укажите корректный e-mail.";
+  }
+  setFieldState(clientEmailInput, FIELD_ERRORS.email, error);
+  return !error;
+}
+
+function validatePhoneField() {
+  const config = getPhoneMaskConfig();
+  const digits = normalizePhoneDigits(clientPhoneInput.value, config);
+  const error = digits.length === config.localLength ? "" : "Укажите корректный телефон.";
+  setFieldState(clientPhoneInput, FIELD_ERRORS.phone, error);
+  return !error;
+}
+
+function validatePositionField() {
+  const hasValue = Boolean(positionSelect.value);
+  setFieldState(positionSelect, FIELD_ERRORS.position, "");
+  positionSelect.closest(".field")?.classList.toggle("invalid", !hasValue);
+  return hasValue;
+}
+
+function validateCustomPositionField() {
+  if (positionSelect.value !== "Другое") {
+    setFieldState(customPositionInput, FIELD_ERRORS.customPosition, "");
+    return true;
+  }
+  return validateRequiredText(customPositionInput, FIELD_ERRORS.customPosition, "Укажите свою должность.");
+}
+
+function validateBookingForm() {
+  const checks = [
+    () => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя."),
+    () => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию."),
+    validateEmailField,
+    validatePhoneField,
+    () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."),
+    validatePositionField,
+    validateCustomPositionField,
+  ];
+
+  let firstInvalid = null;
+  for (const check of checks) {
+    const valid = check();
+    if (!valid && !firstInvalid) {
+      firstInvalid = document.querySelector(".field.invalid input, .field.invalid select");
+    }
+  }
+
+  if (firstInvalid) {
+    firstInvalid.focus();
+  }
+  return !firstInvalid;
+}
 
 function setStatus(message, kind = "") {
   statusNode.textContent = message;
@@ -44,6 +141,13 @@ function setStep(stepName) {
     indicator.classList.toggle("active", index === activeIndex);
     indicator.classList.toggle("complete", index < activeIndex);
   });
+  if (bookingTitleNode) {
+    bookingTitleNode.textContent = stepName === "time"
+      ? "Выберите время"
+      : stepName === "details"
+        ? "Введите ваши данные"
+        : "Выберите дату";
+  }
 }
 
 function escapeHtml(value) {
@@ -122,22 +226,19 @@ function renderDates() {
   if (!state.slotsByDay.size) {
     datesNode.classList.add("empty");
     datesNode.innerHTML = "<p>Свободных дат пока нет. Попробуйте обновить список позже.</p>";
-    summaryNode.textContent = "На ближайшие дни нет доступных окон для демо.";
+    selectedDatePanel.classList.add("hidden-panel");
     slotsPanel.classList.add("hidden-panel");
     formPanel.classList.add("hidden-panel");
     return;
   }
 
   datesNode.classList.remove("empty");
-  summaryNode.textContent = "Выберите дату, чтобы увидеть доступное время.";
   datesNode.innerHTML = [...state.slotsByDay.entries()]
     .map(([dayKey, slots]) => {
       const date = new Date(dayKey);
-      const isSelected = dayKey === state.selectedDayKey;
       return `
-        <button class="date-option${isSelected ? " active" : ""}" type="button" data-day="${escapeHtml(dayKey)}">
+        <button class="date-option" type="button" data-day="${escapeHtml(dayKey)}">
           <strong>${formatShortDateLabel(date)}</strong>
-          <span>${slots.length} ${slots.length === 1 ? "слот" : "слота"}</span>
         </button>`;
     })
     .join("");
@@ -146,20 +247,23 @@ function renderDates() {
 function renderSlotsForSelectedDate() {
   const slots = state.slotsByDay.get(state.selectedDayKey) || [];
   if (!state.selectedDayKey || !slots.length) {
+    selectedDatePanel.classList.add("hidden-panel");
     slotsPanel.classList.add("hidden-panel");
+    datesNode.classList.remove("hidden-panel");
     return;
   }
 
   const selectedDate = new Date(state.selectedDayKey);
   selectedDateSummaryNode.textContent = formatDateLabel(selectedDate);
+  selectedDatePanel.classList.remove("hidden-panel");
+  datesNode.classList.add("hidden-panel");
   slotsPanel.classList.remove("hidden-panel");
   slotsNode.classList.remove("empty");
   slotsNode.innerHTML = slots
     .map(
       (slot) => `
         <button class="time-option" type="button" data-start="${escapeHtml(slot.start)}" data-end="${escapeHtml(slot.end)}">
-          <strong>${formatTimeLabel(new Date(slot.start))}</strong>
-          <span>${formatTimeLabel(new Date(slot.end))}</span>
+          <span>${formatTimeLabel(new Date(slot.start))} – ${formatTimeLabel(new Date(slot.end))}</span>
         </button>`,
     )
     .join("");
@@ -189,7 +293,9 @@ async function loadSlots() {
     setStatus("Доступные даты обновлены.", "success");
   } catch (error) {
     datesNode.classList.add("empty");
+    datesNode.classList.remove("hidden-panel");
     datesNode.innerHTML = "<p>Не удалось загрузить даты.</p>";
+    selectedDatePanel.classList.add("hidden-panel");
     slotsPanel.classList.add("hidden-panel");
     setStatus(error.message, "error");
   } finally {
@@ -202,7 +308,6 @@ function selectDate(dayKey) {
   state.selectedSlot = null;
   formPanel.classList.add("hidden-panel");
   setStep("time");
-  renderDates();
   renderSlotsForSelectedDate();
 }
 
@@ -214,9 +319,64 @@ function selectSlot(start, end) {
     button.classList.toggle("active", button.dataset.start === start && button.dataset.end === end);
   });
   selectedSlotSummaryNode.textContent = `Вы выбрали ${formatDateTimeLabel(new Date(start))} - ${formatTimeLabel(new Date(end))}.`;
+  bookingWidget.classList.add("hidden-panel");
   formPanel.classList.remove("hidden-panel");
   setStep("details");
   formPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(value || "").trim());
+}
+
+function syncEmailValidity() {
+  return validateEmailField();
+}
+
+function getClientFullName() {
+  return [clientFirstNameInput.value.trim(), clientLastNameInput.value.trim()].filter(Boolean).join(" ");
+}
+
+function getPhoneMaskConfig() {
+  return PHONE_MASKS[clientPhoneCountryInput.value] || PHONE_MASKS.RU;
+}
+
+function extractDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizePhoneDigits(value, config) {
+  let digits = extractDigits(value);
+  if (config.trunkPrefix && digits.startsWith(config.trunkPrefix) && digits.length > config.localLength) {
+    digits = digits.slice(1);
+  }
+  if (config.countryCode && digits.startsWith(config.countryCode) && digits.length > config.localLength) {
+    digits = digits.slice(config.countryCode.length);
+  }
+  return digits.slice(0, config.localLength);
+}
+
+function applyPhoneMask(rawValue = "") {
+  const config = getPhoneMaskConfig();
+  const digits = normalizePhoneDigits(rawValue || clientPhoneInput.value, config);
+  const placeholderChars = config.placeholder.split("");
+  let digitIndex = 0;
+  const masked = placeholderChars.map((char) => {
+    if (!/\d/.test(char)) {
+      return char;
+    }
+    if (digitIndex >= digits.length) {
+      return "";
+    }
+    return digits[digitIndex++];
+  }).join("");
+  clientPhoneInput.value = masked;
+}
+
+function syncPhoneMask() {
+  const config = getPhoneMaskConfig();
+  clientPhoneInput.placeholder = config.placeholder;
+  applyPhoneMask(clientPhoneInput.value);
 }
 
 function getPositionValue() {
@@ -225,10 +385,14 @@ function getPositionValue() {
 
 function syncCustomPosition() {
   const isCustom = positionSelect.value === "Другое";
-  customPositionField.classList.toggle("hidden-panel", !isCustom);
+  positionSelect.classList.toggle("hidden-panel", isCustom);
+  customPositionInput.classList.toggle("hidden-panel", !isCustom);
   customPositionInput.required = isCustom;
-  if (!isCustom) {
+  if (isCustom) {
+    customPositionInput.focus();
+  } else {
     customPositionInput.value = "";
+    setFieldState(customPositionInput, FIELD_ERRORS.customPosition, "");
   }
 }
 
@@ -239,8 +403,13 @@ function resetSelection(resetForm = true) {
   if (resetForm) {
     form.reset();
     syncCustomPosition();
+    syncPhoneMask();
   }
+  bookingWidget.classList.toggle("hidden-panel", Boolean(state.selectedSlot));
   formPanel.classList.add("hidden-panel");
+  datesNode.classList.toggle("hidden-panel", Boolean(state.selectedDayKey));
+  selectedDatePanel.classList.toggle("hidden-panel", !state.selectedDayKey);
+  slotsPanel.classList.toggle("hidden-panel", !state.selectedDayKey);
   setStep(state.selectedDayKey ? "time" : "date");
 }
 
@@ -251,12 +420,12 @@ async function submitBooking(event) {
     return;
   }
 
-  const position = getPositionValue();
-  if (!position) {
-    setStatus("Укажите должность.", "error");
+  if (!validateBookingForm()) {
+    setStatus("Проверьте обязательные поля формы.", "error");
     return;
   }
 
+  const position = getPositionValue();
   bookButton.disabled = true;
   setStatus("Бронируем встречу...", "");
 
@@ -267,7 +436,7 @@ async function submitBooking(event) {
       body: JSON.stringify({
         start: startInput.value,
         end: endInput.value,
-        clientName: clientNameInput.value.trim(),
+        clientName: getClientFullName(),
         clientEmail: clientEmailInput.value.trim(),
         clientPhone: clientPhoneInput.value.trim(),
         companyName: companyNameInput.value.trim(),
@@ -307,17 +476,54 @@ slotsNode.addEventListener("click", (event) => {
 });
 
 refreshButton.addEventListener("click", loadSlots);
+changeTimeButton.addEventListener("click", () => {
+  state.selectedSlot = null;
+  startInput.value = "";
+  endInput.value = "";
+  bookingWidget.classList.remove("hidden-panel");
+  formPanel.classList.add("hidden-panel");
+  slotsPanel.classList.remove("hidden-panel");
+  selectedDatePanel.classList.remove("hidden-panel");
+  datesNode.classList.add("hidden-panel");
+  setStep("time");
+});
 changeDateButton.addEventListener("click", () => {
   state.selectedDayKey = null;
+  state.selectedSlot = null;
+  bookingWidget.classList.remove("hidden-panel");
+  selectedDatePanel.classList.add("hidden-panel");
   slotsPanel.classList.add("hidden-panel");
+  datesNode.classList.remove("hidden-panel");
   formPanel.classList.add("hidden-panel");
   setStep("date");
   renderDates();
 });
-cancelButton.addEventListener("click", resetSelection);
-positionSelect.addEventListener("change", syncCustomPosition);
+positionSelect.addEventListener("change", () => {
+  syncCustomPosition();
+  validatePositionField();
+  validateCustomPositionField();
+});
+clientPhoneCountryInput.addEventListener("change", () => {
+  syncPhoneMask();
+  validatePhoneField();
+});
+clientPhoneInput.addEventListener("input", () => {
+  applyPhoneMask(clientPhoneInput.value);
+  validatePhoneField();
+});
+clientFirstNameInput.addEventListener("blur", () => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя."));
+clientFirstNameInput.addEventListener("input", () => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя."));
+clientLastNameInput.addEventListener("blur", () => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию."));
+clientLastNameInput.addEventListener("input", () => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию."));
+clientEmailInput.addEventListener("input", validateEmailField);
+clientEmailInput.addEventListener("blur", validateEmailField);
+companyNameInput.addEventListener("blur", () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."));
+companyNameInput.addEventListener("input", () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."));
+customPositionInput.addEventListener("input", validateCustomPositionField);
+customPositionInput.addEventListener("blur", validateCustomPositionField);
 form.addEventListener("submit", submitBooking);
 
 syncCustomPosition();
+syncPhoneMask();
 setStep("date");
 loadSlots();

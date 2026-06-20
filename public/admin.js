@@ -237,6 +237,9 @@ function switchTab(tabName) {
   tabPanels.forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.tabPanel === tabName);
   });
+  if (tabName === "embed") {
+    renderEmbedCode();
+  }
 }
 
 function renderEmployees() {
@@ -1068,6 +1071,8 @@ function initializeAdmin() {
       setStatus("Не удалось загрузить сотрудников.", "error");
     });
 }
+
+renderEmbedCode();
 
 setAdminVisible(false);
 checkAdminSession()

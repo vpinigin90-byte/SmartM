@@ -67,7 +67,7 @@ select {
 
 .auth-card {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   max-width: 460px;
   padding: 24px;
   border: 1px solid var(--border);
@@ -83,11 +83,12 @@ select {
 .booking-shell {
   display: grid;
   gap: 20px;
+  padding: 24px 0 36px;
 }
 
 .booking-hero {
   display: grid;
-  grid-template-columns: minmax(280px, 0.78fr) minmax(380px, 1.22fr);
+  grid-template-columns: 1fr;
   gap: 20px;
   align-items: start;
 }
@@ -102,26 +103,32 @@ select {
 
 .booking-copy {
   display: grid;
-  gap: 22px;
-  padding: 30px;
-  position: sticky;
-  top: 24px;
+  gap: 10px;
+  padding: 24px 28px;
+  background: linear-gradient(180deg, #ffffff, #fbfbfa);
+}
+
+.booking-copy h1 {
+  max-width: none;
+  font-size: clamp(24px, 2.9vw, 38px);
+  line-height: 1.08;
+  white-space: nowrap;
 }
 
 .booking-lead {
   margin: 0;
   color: var(--muted-foreground);
-  font-size: 16px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .booking-panel {
-  padding: 24px;
+  padding: 18px;
 }
 
 .smartm-widget {
   display: grid;
-  gap: 18px;
+  gap: 10px;
 }
 
 .booking-steps {
@@ -145,7 +152,7 @@ select {
   border-radius: 9px;
   color: var(--muted-foreground);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .booking-step span {
@@ -157,6 +164,7 @@ select {
   background: #ffffff;
   color: var(--muted-foreground);
   font-size: 12px;
+  font-weight: 500;
 }
 
 .booking-step.active {
@@ -182,12 +190,13 @@ select {
 .compact-head h3 {
   margin: 0 0 6px;
   font-size: 16px;
+  font-weight: 500;
 }
 
 .date-grid,
 .time-grid {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .date-grid {
@@ -211,8 +220,8 @@ select {
 .date-option,
 .time-option {
   display: grid;
-  gap: 6px;
-  min-height: 72px;
+  gap: 4px;
+  min-height: 64px;
   border-color: rgba(228, 228, 231, 0.96);
   background: linear-gradient(180deg, #ffffff, #fbfbfa);
   color: var(--foreground);
@@ -224,10 +233,12 @@ select {
 .time-option span {
   color: var(--muted-foreground);
   font-size: 12px;
+  font-weight: 400;
 }
 
 .time-option strong {
   font-size: 18px;
+  font-weight: 500;
 }
 
 .date-option.active,
@@ -309,6 +320,7 @@ h1 {
   font-size: clamp(28px, 4vw, 44px);
   line-height: 1.05;
   letter-spacing: 0;
+  font-weight: 500;
 }
 
 .header-actions {
@@ -540,6 +552,14 @@ select:focus {
   margin-top: 4px;
 }
 
+.booking-consent {
+  width: 100%;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 button {
   min-height: 40px;
   border: 1px solid transparent;
@@ -584,7 +604,7 @@ button:disabled {
 
 .status {
   min-height: 42px;
-  margin: 0 0 20px;
+  margin: 0 0 12px;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -618,12 +638,55 @@ button:disabled {
   margin-bottom: 18px;
 }
 
+.booking-results-head {
+  margin-bottom: 4px;
+}
+
+.booking-title-row {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  column-gap: 0;
+  row-gap: 2px;
+  min-height: auto;
+  font-size: 14px;
+}
+
+.text-action-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 28px;
+  font-weight: 400;
+}
+
+.text-action-button:hover {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.text-action-button:disabled {
+  opacity: 0.56;
+  cursor: wait;
+}
+
 .results h2,
 .panel h2 {
   margin: 0;
   font-size: 20px;
   line-height: 1.2;
   letter-spacing: 0;
+  font-weight: 500;
+}
+
+#booking-title {
+  line-height: 28px;
 }
 
 .summary {
@@ -825,10 +888,6 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .booking-copy {
-    position: static;
-  }
-
   .overview-grid {
     grid-template-columns: repeat(3, minmax(180px, 1fr));
     overflow-x: auto;
@@ -844,6 +903,10 @@ button:disabled {
 }
 
 @media (max-width: 720px) {
+  .phone-field {
+    grid-template-columns: 1fr;
+  }
+
   .shell {
     padding: 14px;
   }
@@ -862,7 +925,11 @@ button:disabled {
   }
 
   h1 {
-    font-size: 30px;
+    font-size: 28px;
+  }
+
+  .booking-copy h1 {
+    white-space: normal;
   }
 
   .tabs {
@@ -900,4 +967,143 @@ button:disabled {
   .event-actions button {
     width: 100%;
   }
+}
+
+
+.date-option strong,
+.time-option strong,
+#booking-title,
+#selected-slot-summary,
+#selected-date-summary {
+  font-weight: 500;
+}
+
+#booking-status,
+.summary,
+.date-grid button,
+.time-grid button,
+.text-action-button {
+  font-weight: 400;
+}
+
+.date-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+
+.selected-date-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 0;
+}
+
+.selected-date-label {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.icon-action-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+
+.icon-action-button:hover {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.time-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  text-align: center;
+}
+
+.time-option span {
+  font-size: 16px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.booking-form {
+  gap: 14px;
+}
+
+.booking-form .split {
+  grid-template-columns: 1fr;
+}
+
+.phone-field {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.phone-country {
+  min-width: 0;
+}
+
+.booking-form #additional-attendees {
+  min-height: 40px;
+}
+
+.booking-form textarea#additional-attendees {
+  min-height: 40px;
+  resize: none;
+}
+
+.booking-form-head {
+  margin-bottom: 18px;
+}
+
+.selected-slot-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.field-label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+
+.field-error {
+  display: block;
+  min-height: 16px;
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.field.invalid input,
+.field.invalid textarea,
+.field.invalid select,
+.field.invalid .phone-field {
+  border-color: rgba(185, 28, 28, 0.45);
+  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.08);
+}
+
+.field.invalid .phone-field input,
+.field.invalid .phone-field select {
+  border-color: rgba(185, 28, 28, 0.45);
 }
