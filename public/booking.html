@@ -24,6 +24,12 @@
         </div>
 
         <section class="booking-panel smartm-widget" aria-labelledby="booking-title">
+          <ol class="booking-steps" aria-label="Шаги бронирования">
+            <li class="booking-step active" data-step-indicator="date"><span>1</span>Дата</li>
+            <li class="booking-step" data-step-indicator="time"><span>2</span>Время</li>
+            <li class="booking-step" data-step-indicator="details"><span>3</span>Данные</li>
+          </ol>
+
           <div class="results-head">
             <div>
               <h2 id="booking-title">Выберите дату</h2>
@@ -103,6 +109,12 @@
               <input id="custom-position" type="text" placeholder="Укажите должность" />
             </label>
           </div>
+
+          <label class="field">
+            <span>Добавить других участников встречи</span>
+            <textarea id="additional-attendees" rows="2" placeholder="email1@example.com, email2@example.com"></textarea>
+            <small>Можно указать несколько email через запятую.</small>
+          </label>
 
           <label class="field">
             <span>Комментарий</span>

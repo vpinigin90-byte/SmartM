@@ -1466,12 +1466,52 @@ function isSlotAllowedByRules(startIso, endIso, rules) {
   return filterMeetingSlotsByRules([{ start: startIso, end: endIso }], rules).length === 1;
 }
 
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeAdditionalAttendees(value, clientEmail) {
+  const rawItems = Array.isArray(value)
+    ? value.flatMap((item) => String(item || "").split(/[\s,;]+/))
+    : String(value || "")
+        .split(/[\s,;]+/)
+  const items = rawItems.map((item) => item.trim()).filter(Boolean);
+  const clientEmailLower = String(clientEmail || "").trim().toLowerCase();
+  const seen = new Set();
+  const attendees = [];
+
+  for (const item of items) {
+    const email = String(item || "").trim();
+    const emailLower = email.toLowerCase();
+
+    if (!email) {
+      continue;
+    }
+
+    if (!isEmail(email)) {
+      const error = new Error("Invalid attendee email");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (emailLower === clientEmailLower || seen.has(emailLower)) {
+      continue;
+    }
+
+    seen.add(emailLower);
+    attendees.push(email);
+  }
+
+  return attendees;
+}
+
 function normalizeBookingPayload(body) {
   const clientName = String(body.clientName || body.name || "").trim();
   const clientEmail = String(body.clientEmail || body.email || "").trim();
   const clientPhone = String(body.clientPhone || body.phone || "").trim();
   const companyName = String(body.companyName || body.company || "").trim();
   const position = String(body.position || body.clientPosition || "").trim();
+  const additionalAttendees = normalizeAdditionalAttendees(body.additionalAttendees, clientEmail);
   const start = String(body.start || body.startIso || "").trim();
   const end = String(body.end || body.endIso || "").trim();
   const comment = String(body.comment || "").trim();
@@ -1483,7 +1523,7 @@ function normalizeBookingPayload(body) {
     throw error;
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
+  if (!isEmail(clientEmail)) {
     const error = new Error("Invalid client email");
     error.statusCode = 400;
     throw error;
@@ -1514,6 +1554,7 @@ function normalizeBookingPayload(body) {
     clientPhone,
     companyName,
     position,
+    additionalAttendees,
     start,
     end,
     comment,
@@ -1604,6 +1645,9 @@ async function createPublicBooking(booking) {
     `Телефон: ${booking.clientPhone}`,
     `Компания: ${booking.companyName}`,
     `Должность: ${booking.position}`,
+    booking.additionalAttendees.length
+      ? `Дополнительные участники: ${booking.additionalAttendees.join(", ")}`
+      : "",
     booking.comment ? `Комментарий: ${booking.comment}` : "",
   ]
     .filter(Boolean)
@@ -1621,6 +1665,10 @@ async function createPublicBooking(booking) {
         name: booking.clientName,
         email: booking.clientEmail,
       },
+      ...booking.additionalAttendees.map((email) => ({
+        name: email,
+        email,
+      })),
     ],
   });
 

@@ -87,23 +87,23 @@ select {
 
 .booking-hero {
   display: grid;
-  grid-template-columns: minmax(280px, 0.82fr) minmax(360px, 1.18fr);
+  grid-template-columns: minmax(280px, 0.78fr) minmax(380px, 1.22fr);
   gap: 20px;
   align-items: start;
 }
 
 .booking-copy,
 .booking-panel {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 1px solid rgba(228, 228, 231, 0.92);
+  border-radius: 14px;
   background: var(--card);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 18px 48px rgba(24, 24, 27, 0.08);
 }
 
 .booking-copy {
   display: grid;
   gap: 22px;
-  padding: 28px;
+  padding: 30px;
   position: sticky;
   top: 24px;
 }
@@ -116,12 +116,63 @@ select {
 }
 
 .booking-panel {
-  padding: 22px;
+  padding: 24px;
 }
 
 .smartm-widget {
   display: grid;
-  gap: 16px;
+  gap: 18px;
+}
+
+.booking-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--muted);
+  list-style: none;
+}
+
+.booking-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  border-radius: 9px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.booking-step span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.booking-step.active {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-sm);
+}
+
+.booking-step.complete {
+  color: var(--accent-foreground);
+}
+
+.booking-step.complete span,
+.booking-step.active span {
+  background: var(--foreground);
+  color: var(--primary-foreground);
 }
 
 .compact-head {
@@ -140,7 +191,7 @@ select {
 }
 
 .date-grid {
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
 }
 
 .date-grid.empty,
@@ -160,25 +211,33 @@ select {
 .date-option,
 .time-option {
   display: grid;
-  gap: 4px;
-  min-height: 64px;
-  border-color: var(--border);
-  background: var(--card);
+  gap: 6px;
+  min-height: 72px;
+  border-color: rgba(228, 228, 231, 0.96);
+  background: linear-gradient(180deg, #ffffff, #fbfbfa);
   color: var(--foreground);
   text-align: left;
+  box-shadow: 0 8px 22px rgba(24, 24, 27, 0.04);
 }
 
-.date-option span {
+.date-option span,
+.time-option span {
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
+.time-option strong {
+  font-size: 18px;
+}
+
 .date-option.active,
+.time-option.active,
 .time-option:hover,
 .date-option:hover {
   border-color: rgba(20, 83, 45, 0.28);
-  background: var(--accent);
+  background: linear-gradient(180deg, #f3fbf6, #ecf7f0);
   color: var(--accent-foreground);
+  box-shadow: 0 10px 26px rgba(20, 83, 45, 0.1);
 }
 
 .slots-panel {
@@ -188,6 +247,12 @@ select {
 
 .time-grid {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.field small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .embed-code-area {

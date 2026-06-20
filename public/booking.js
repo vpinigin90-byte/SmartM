@@ -18,9 +18,11 @@ const companyNameInput = document.querySelector("#company-name");
 const positionSelect = document.querySelector("#client-position");
 const customPositionField = document.querySelector("#custom-position-field");
 const customPositionInput = document.querySelector("#custom-position");
+const additionalAttendeesInput = document.querySelector("#additional-attendees");
 const clientCommentInput = document.querySelector("#client-comment");
 const bookButton = document.querySelector("#book-slot-button");
 const cancelButton = document.querySelector("#cancel-booking-button");
+const stepIndicators = [...document.querySelectorAll("[data-step-indicator]")];
 
 const state = {
   slots: [],
@@ -32,6 +34,16 @@ const state = {
 function setStatus(message, kind = "") {
   statusNode.textContent = message;
   statusNode.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function setStep(stepName) {
+  const order = ["date", "time", "details"];
+  const activeIndex = order.indexOf(stepName);
+  stepIndicators.forEach((indicator) => {
+    const index = order.indexOf(indicator.dataset.stepIndicator);
+    indicator.classList.toggle("active", index === activeIndex);
+    indicator.classList.toggle("complete", index < activeIndex);
+  });
 }
 
 function escapeHtml(value) {
@@ -125,7 +137,7 @@ function renderDates() {
       return `
         <button class="date-option${isSelected ? " active" : ""}" type="button" data-day="${escapeHtml(dayKey)}">
           <strong>${formatShortDateLabel(date)}</strong>
-          <span>${slots.length} слотов</span>
+          <span>${slots.length} ${slots.length === 1 ? "слот" : "слота"}</span>
         </button>`;
     })
     .join("");
@@ -146,7 +158,8 @@ function renderSlotsForSelectedDate() {
     .map(
       (slot) => `
         <button class="time-option" type="button" data-start="${escapeHtml(slot.start)}" data-end="${escapeHtml(slot.end)}">
-          ${formatTimeLabel(new Date(slot.start))} - ${formatTimeLabel(new Date(slot.end))}
+          <strong>${formatTimeLabel(new Date(slot.start))}</strong>
+          <span>${formatTimeLabel(new Date(slot.end))}</span>
         </button>`,
     )
     .join("");
@@ -171,6 +184,7 @@ async function loadSlots() {
     state.selectedDayKey = null;
     state.selectedSlot = null;
     resetSelection(false);
+    setStep("date");
     renderDates();
     setStatus("Доступные даты обновлены.", "success");
   } catch (error) {
@@ -187,6 +201,7 @@ function selectDate(dayKey) {
   state.selectedDayKey = dayKey;
   state.selectedSlot = null;
   formPanel.classList.add("hidden-panel");
+  setStep("time");
   renderDates();
   renderSlotsForSelectedDate();
 }
@@ -195,8 +210,12 @@ function selectSlot(start, end) {
   state.selectedSlot = { start, end };
   startInput.value = start;
   endInput.value = end;
+  slotsNode.querySelectorAll(".time-option").forEach((button) => {
+    button.classList.toggle("active", button.dataset.start === start && button.dataset.end === end);
+  });
   selectedSlotSummaryNode.textContent = `Вы выбрали ${formatDateTimeLabel(new Date(start))} - ${formatTimeLabel(new Date(end))}.`;
   formPanel.classList.remove("hidden-panel");
+  setStep("details");
   formPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -222,6 +241,7 @@ function resetSelection(resetForm = true) {
     syncCustomPosition();
   }
   formPanel.classList.add("hidden-panel");
+  setStep(state.selectedDayKey ? "time" : "date");
 }
 
 async function submitBooking(event) {
@@ -252,6 +272,7 @@ async function submitBooking(event) {
         clientPhone: clientPhoneInput.value.trim(),
         companyName: companyNameInput.value.trim(),
         position,
+        additionalAttendees: additionalAttendeesInput.value.trim(),
         comment: clientCommentInput.value.trim(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
@@ -290,6 +311,7 @@ changeDateButton.addEventListener("click", () => {
   state.selectedDayKey = null;
   slotsPanel.classList.add("hidden-panel");
   formPanel.classList.add("hidden-panel");
+  setStep("date");
   renderDates();
 });
 cancelButton.addEventListener("click", resetSelection);
@@ -297,4 +319,5 @@ positionSelect.addEventListener("change", syncCustomPosition);
 form.addEventListener("submit", submitBooking);
 
 syncCustomPosition();
+setStep("date");
 loadSlots();
