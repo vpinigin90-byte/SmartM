@@ -18,12 +18,35 @@
         </div>
 
         <section class="booking-panel smartm-widget" aria-labelledby="booking-title">
-          <div id="booking-status" class="status" aria-live="polite"></div>
-
           <div class="results-head booking-results-head">
             <div class="booking-title-row">
               <h2 id="booking-title">Выберите дату</h2>
-              <button id="refresh-slots-button" class="text-action-button" type="button">Обновить</button>
+            </div>
+          </div>
+          <div id="booking-status" class="status" aria-live="polite"></div>
+          <div id="public-calendar-panel" class="calendar-shell">
+            <div class="calendar-header">
+              <h3 id="calendar-month-label" class="calendar-month-label"></h3>
+              <div class="calendar-nav" aria-label="Навигация по месяцам">
+                <button id="calendar-prev-button" class="calendar-nav-button" type="button" aria-label="Предыдущий месяц">
+                  <span aria-hidden="true">‹</span>
+                </button>
+                <button id="calendar-next-button" class="calendar-nav-button" type="button" aria-label="Следующий месяц">
+                  <span aria-hidden="true">›</span>
+                </button>
+              </div>
+            </div>
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>Пн</span>
+              <span>Вт</span>
+              <span>Ср</span>
+              <span>Чт</span>
+              <span>Пт</span>
+              <span>Сб</span>
+              <span>Вс</span>
+            </div>
+            <div id="public-dates" class="calendar-grid empty">
+              <p>Даты загружаются.</p>
             </div>
           </div>
           <div id="selected-date-panel" class="selected-date-panel hidden-panel">
@@ -37,9 +60,6 @@
             >
               <span aria-hidden="true">✎</span>
             </button>
-          </div>
-          <div id="public-dates" class="date-grid empty">
-            <p>Даты загружаются.</p>
           </div>
           <div id="public-slots-panel" class="slots-panel hidden-panel">
             <div id="public-slots" class="time-grid empty">
@@ -149,6 +169,21 @@
         </form>
       </section>
     </main>
+
+    <div id="booking-success-modal" class="booking-modal hidden-panel" aria-hidden="true">
+      <div id="booking-success-backdrop" class="booking-modal-backdrop"></div>
+      <div class="booking-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="booking-success-title">
+        <button id="booking-success-close" class="booking-modal-close" type="button" aria-label="Закрыть окно">
+          <span aria-hidden="true">×</span>
+        </button>
+        <div class="booking-modal-icon" aria-hidden="true">✓</div>
+        <h2 id="booking-success-title">Встреча забронирована</h2>
+        <p id="booking-success-message">
+          Встреча создана в календаре, участник добавлен по указанному e-mail.
+        </p>
+        <button id="booking-success-confirm" class="primary-button booking-modal-button" type="button">Понятно</button>
+      </div>
+    </div>
 
     <script src="/booking.js"></script>
   </body>

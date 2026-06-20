@@ -1,10 +1,13 @@
 const datesNode = document.querySelector("#public-dates");
+const calendarPanel = document.querySelector("#public-calendar-panel");
+const calendarMonthLabelNode = document.querySelector("#calendar-month-label");
+const calendarPrevButton = document.querySelector("#calendar-prev-button");
+const calendarNextButton = document.querySelector("#calendar-next-button");
 const slotsPanel = document.querySelector("#public-slots-panel");
 const slotsNode = document.querySelector("#public-slots");
 const statusNode = document.querySelector("#booking-status");
 const selectedDateSummaryNode = document.querySelector("#selected-date-summary");
 const selectedDatePanel = document.querySelector("#selected-date-panel");
-const refreshButton = document.querySelector("#refresh-slots-button");
 const changeDateButton = document.querySelector("#change-date-button");
 const bookingTitleNode = document.querySelector("#booking-title");
 const bookingWidget = document.querySelector(".smartm-widget");
@@ -25,6 +28,11 @@ const additionalAttendeesInput = document.querySelector("#additional-attendees")
 const clientCommentInput = document.querySelector("#client-comment");
 const bookButton = document.querySelector("#book-slot-button");
 const changeTimeButton = document.querySelector("#change-time-button");
+const bookingSuccessModal = document.querySelector("#booking-success-modal");
+const bookingSuccessBackdrop = document.querySelector("#booking-success-backdrop");
+const bookingSuccessCloseButton = document.querySelector("#booking-success-close");
+const bookingSuccessConfirmButton = document.querySelector("#booking-success-confirm");
+const bookingSuccessMessageNode = document.querySelector("#booking-success-message");
 const stepIndicators = [...document.querySelectorAll("[data-step-indicator]")];
 
 const state = {
@@ -32,6 +40,7 @@ const state = {
   slotsByDay: new Map(),
   selectedDayKey: null,
   selectedSlot: null,
+  visibleMonthStart: null,
 };
 
 const PHONE_MASKS = {
@@ -129,8 +138,23 @@ function validateBookingForm() {
 }
 
 function setStatus(message, kind = "") {
+  if (!statusNode) {
+    return;
+  }
   statusNode.textContent = message;
   statusNode.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function setBookingSuccessModal(open, message = "") {
+  if (!bookingSuccessModal) {
+    return;
+  }
+  bookingSuccessModal.classList.toggle("hidden-panel", !open);
+  bookingSuccessModal.setAttribute("aria-hidden", String(!open));
+  document.body.classList.toggle("modal-open", open);
+  if (open && bookingSuccessMessageNode && message) {
+    bookingSuccessMessageNode.textContent = message;
+  }
 }
 
 function setStep(stepName) {
@@ -178,6 +202,41 @@ function formatShortDateLabel(date) {
   }).format(date);
 }
 
+function formatCalendarMonthLabel(date) {
+  const month = new Intl.DateTimeFormat("ru-RU", { month: "long" }).format(date);
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${date.getFullYear()}`;
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date, amount) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function getAvailableMonthBounds() {
+  const dayKeys = [...state.slotsByDay.keys()].sort();
+  if (!dayKeys.length) {
+    return null;
+  }
+  return {
+    min: startOfMonth(new Date(dayKeys[0])),
+    max: startOfMonth(new Date(dayKeys[dayKeys.length - 1])),
+  };
+}
+
+function clampMonthToBounds(monthStart, bounds) {
+  const target = startOfMonth(monthStart || new Date());
+  if (target < bounds.min) {
+    return new Date(bounds.min);
+  }
+  if (target > bounds.max) {
+    return new Date(bounds.max);
+  }
+  return target;
+}
+
 function formatDateTimeLabel(date) {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
@@ -197,7 +256,7 @@ function formatTimeLabel(date) {
 function getSlotsRange() {
   const start = toLocalDayStart(new Date());
   const end = new Date(start);
-  end.setDate(end.getDate() + 7);
+  end.setDate(end.getDate() + 28);
   return { start, end };
 }
 
@@ -223,25 +282,85 @@ function groupSlotsByDay(slots) {
 }
 
 function renderDates() {
-  if (!state.slotsByDay.size) {
+  const bounds = getAvailableMonthBounds();
+  if (!bounds) {
+    state.visibleMonthStart = startOfMonth(new Date());
     datesNode.classList.add("empty");
-    datesNode.innerHTML = "<p>Свободных дат пока нет. Попробуйте обновить список позже.</p>";
+    datesNode.innerHTML = "<p>Свободных дат пока нет. Попробуйте позже.</p>";
+    calendarPanel.classList.remove("hidden-panel");
     selectedDatePanel.classList.add("hidden-panel");
     slotsPanel.classList.add("hidden-panel");
     formPanel.classList.add("hidden-panel");
+    if (calendarMonthLabelNode) {
+      calendarMonthLabelNode.textContent = formatCalendarMonthLabel(state.visibleMonthStart);
+    }
+    if (calendarPrevButton) {
+      calendarPrevButton.disabled = true;
+    }
+    if (calendarNextButton) {
+      calendarNextButton.disabled = true;
+    }
     return;
   }
 
+  const preferredMonth = state.selectedDayKey
+    ? startOfMonth(new Date(state.selectedDayKey))
+    : state.visibleMonthStart || startOfMonth(new Date());
+  state.visibleMonthStart = clampMonthToBounds(preferredMonth, bounds);
+
+  if (calendarMonthLabelNode) {
+    calendarMonthLabelNode.textContent = formatCalendarMonthLabel(state.visibleMonthStart);
+  }
+  if (calendarPrevButton) {
+    calendarPrevButton.disabled = state.visibleMonthStart <= bounds.min;
+  }
+  if (calendarNextButton) {
+    calendarNextButton.disabled = state.visibleMonthStart >= bounds.max;
+  }
+
+  const monthStart = state.visibleMonthStart;
+  const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(gridStart.getDate() - ((monthStart.getDay() + 6) % 7));
+  const gridEnd = new Date(monthEnd);
+  gridEnd.setDate(gridEnd.getDate() + (6 - ((monthEnd.getDay() + 6) % 7)));
+  const cellCount = Math.round((gridEnd - gridStart) / 86400000) + 1;
+  if (cellCount < 35) {
+    gridEnd.setDate(gridEnd.getDate() + 7);
+  }
+
+  const availableDays = new Set(state.slotsByDay.keys());
+  const currentMonth = monthStart.getMonth();
+  const minVisibleDate = toLocalDayStart(new Date());
+  const html = [];
+  for (const cursor = new Date(gridStart); cursor <= gridEnd; cursor.setDate(cursor.getDate() + 1)) {
+    const cellDate = new Date(cursor);
+    const dayKey = toLocalDayStart(cellDate).toISOString();
+    const isCurrentMonth = cellDate.getMonth() === currentMonth;
+    const isVisibleDate = cellDate >= minVisibleDate;
+    const isAvailable = isVisibleDate && availableDays.has(dayKey);
+    const isSelected = state.selectedDayKey === dayKey;
+    const classes = ["date-option"];
+
+    if (!isCurrentMonth) {
+      classes.push("is-outside");
+    }
+    if (!isVisibleDate || !isAvailable) {
+      html.push('<span class="date-option-spacer" aria-hidden="true"></span>');
+      continue;
+    }
+    if (isSelected) {
+      classes.push("active");
+    }
+
+    html.push(
+      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}"><strong>${cellDate.getDate()}</strong></button>`,
+    );
+  }
+
   datesNode.classList.remove("empty");
-  datesNode.innerHTML = [...state.slotsByDay.entries()]
-    .map(([dayKey, slots]) => {
-      const date = new Date(dayKey);
-      return `
-        <button class="date-option" type="button" data-day="${escapeHtml(dayKey)}">
-          <strong>${formatShortDateLabel(date)}</strong>
-        </button>`;
-    })
-    .join("");
+  calendarPanel.classList.remove("hidden-panel");
+  datesNode.innerHTML = html.join("");
 }
 
 function renderSlotsForSelectedDate() {
@@ -249,14 +368,14 @@ function renderSlotsForSelectedDate() {
   if (!state.selectedDayKey || !slots.length) {
     selectedDatePanel.classList.add("hidden-panel");
     slotsPanel.classList.add("hidden-panel");
-    datesNode.classList.remove("hidden-panel");
+    calendarPanel.classList.remove("hidden-panel");
     return;
   }
 
   const selectedDate = new Date(state.selectedDayKey);
   selectedDateSummaryNode.textContent = formatDateLabel(selectedDate);
   selectedDatePanel.classList.remove("hidden-panel");
-  datesNode.classList.add("hidden-panel");
+  calendarPanel.classList.add("hidden-panel");
   slotsPanel.classList.remove("hidden-panel");
   slotsNode.classList.remove("empty");
   slotsNode.innerHTML = slots
@@ -271,8 +390,7 @@ function renderSlotsForSelectedDate() {
 
 async function loadSlots() {
   const { start, end } = getSlotsRange();
-  refreshButton.disabled = true;
-  setStatus("Ищем свободные даты...", "");
+  setStatus("", "");
 
   try {
     const params = new URLSearchParams({
@@ -290,21 +408,19 @@ async function loadSlots() {
     resetSelection(false);
     setStep("date");
     renderDates();
-    setStatus("Доступные даты обновлены.", "success");
   } catch (error) {
     datesNode.classList.add("empty");
-    datesNode.classList.remove("hidden-panel");
+    calendarPanel.classList.remove("hidden-panel");
     datesNode.innerHTML = "<p>Не удалось загрузить даты.</p>";
     selectedDatePanel.classList.add("hidden-panel");
     slotsPanel.classList.add("hidden-panel");
     setStatus(error.message, "error");
-  } finally {
-    refreshButton.disabled = false;
   }
 }
 
 function selectDate(dayKey) {
   state.selectedDayKey = dayKey;
+  state.visibleMonthStart = startOfMonth(new Date(dayKey));
   state.selectedSlot = null;
   formPanel.classList.add("hidden-panel");
   setStep("time");
@@ -407,7 +523,7 @@ function resetSelection(resetForm = true) {
   }
   bookingWidget.classList.toggle("hidden-panel", Boolean(state.selectedSlot));
   formPanel.classList.add("hidden-panel");
-  datesNode.classList.toggle("hidden-panel", Boolean(state.selectedDayKey));
+  calendarPanel.classList.toggle("hidden-panel", Boolean(state.selectedDayKey));
   selectedDatePanel.classList.toggle("hidden-panel", !state.selectedDayKey);
   slotsPanel.classList.toggle("hidden-panel", !state.selectedDayKey);
   setStep(state.selectedDayKey ? "time" : "date");
@@ -449,7 +565,8 @@ async function submitBooking(event) {
 
     resetSelection();
     await loadSlots();
-    setStatus("Готово. Встреча создана в календаре, участник добавлен по указанному e-mail.", "success");
+    setStatus("", "");
+    setBookingSuccessModal(true, "Встреча создана в календаре, участник добавлен по указанному e-mail.");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
@@ -475,7 +592,26 @@ slotsNode.addEventListener("click", (event) => {
   selectSlot(button.dataset.start, button.dataset.end);
 });
 
-refreshButton.addEventListener("click", loadSlots);
+if (calendarPrevButton) {
+  calendarPrevButton.addEventListener("click", () => {
+    const bounds = getAvailableMonthBounds();
+    if (!bounds || !state.visibleMonthStart) {
+      return;
+    }
+    state.visibleMonthStart = clampMonthToBounds(addMonths(state.visibleMonthStart, -1), bounds);
+    renderDates();
+  });
+}
+if (calendarNextButton) {
+  calendarNextButton.addEventListener("click", () => {
+    const bounds = getAvailableMonthBounds();
+    if (!bounds || !state.visibleMonthStart) {
+      return;
+    }
+    state.visibleMonthStart = clampMonthToBounds(addMonths(state.visibleMonthStart, 1), bounds);
+    renderDates();
+  });
+}
 changeTimeButton.addEventListener("click", () => {
   state.selectedSlot = null;
   startInput.value = "";
@@ -484,7 +620,7 @@ changeTimeButton.addEventListener("click", () => {
   formPanel.classList.add("hidden-panel");
   slotsPanel.classList.remove("hidden-panel");
   selectedDatePanel.classList.remove("hidden-panel");
-  datesNode.classList.add("hidden-panel");
+  calendarPanel.classList.add("hidden-panel");
   setStep("time");
 });
 changeDateButton.addEventListener("click", () => {
@@ -493,7 +629,7 @@ changeDateButton.addEventListener("click", () => {
   bookingWidget.classList.remove("hidden-panel");
   selectedDatePanel.classList.add("hidden-panel");
   slotsPanel.classList.add("hidden-panel");
-  datesNode.classList.remove("hidden-panel");
+  calendarPanel.classList.remove("hidden-panel");
   formPanel.classList.add("hidden-panel");
   setStep("date");
   renderDates();
@@ -522,6 +658,20 @@ companyNameInput.addEventListener("input", () => validateRequiredText(companyNam
 customPositionInput.addEventListener("input", validateCustomPositionField);
 customPositionInput.addEventListener("blur", validateCustomPositionField);
 form.addEventListener("submit", submitBooking);
+if (bookingSuccessCloseButton) {
+  bookingSuccessCloseButton.addEventListener("click", () => setBookingSuccessModal(false));
+}
+if (bookingSuccessConfirmButton) {
+  bookingSuccessConfirmButton.addEventListener("click", () => setBookingSuccessModal(false));
+}
+if (bookingSuccessBackdrop) {
+  bookingSuccessBackdrop.addEventListener("click", () => setBookingSuccessModal(false));
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && bookingSuccessModal && !bookingSuccessModal.classList.contains("hidden-panel")) {
+    setBookingSuccessModal(false);
+  }
+});
 
 syncCustomPosition();
 syncPhoneMask();
