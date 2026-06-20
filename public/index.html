@@ -52,6 +52,7 @@
           <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="employees">Сотрудники</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="calendar">Календарь</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="client-meeting">Клиент выбирает время для встречи</button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="embed">Код для сайта</button>
         </div>
 
         <div class="hero">
@@ -330,6 +331,28 @@
 
             <div id="meeting-slots" class="slots empty">
               <p>Слоты для клиента ещё не загружены.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="tab-panel" role="tabpanel" data-tab-panel="embed">
+          <section class="panel">
+            <div class="results-head">
+              <div>
+                <h2>Код для сайта</h2>
+                <p class="summary">
+                  Готовый HTML-блок для Tilda T123/T868. Код можно вставить на любой сайт, он обращается к публичному API meet.scroll-tool.ru.
+                </p>
+              </div>
+              <button id="copy-embed-code-button" class="primary-button" type="button">Скопировать код</button>
+            </div>
+
+            <textarea id="embed-code" class="embed-code-area" readonly spellcheck="false"></textarea>
+
+            <div class="rules-preview">
+              <p>
+                Инструкция: откройте Tilda, добавьте блок T123 или T868, вставьте код из поля выше и опубликуйте страницу.
+              </p>
             </div>
           </section>
         </section>

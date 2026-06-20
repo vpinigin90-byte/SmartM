@@ -119,6 +119,85 @@ select {
   padding: 22px;
 }
 
+.smartm-widget {
+  display: grid;
+  gap: 16px;
+}
+
+.compact-head {
+  margin-bottom: 12px;
+}
+
+.compact-head h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.date-grid,
+.time-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.date-grid {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.date-grid.empty,
+.time-grid.empty {
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.date-grid.empty p,
+.time-grid.empty p {
+  margin: 0;
+}
+
+.date-option,
+.time-option {
+  display: grid;
+  gap: 4px;
+  min-height: 64px;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  text-align: left;
+}
+
+.date-option span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.date-option.active,
+.time-option:hover,
+.date-option:hover {
+  border-color: rgba(20, 83, 45, 0.28);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.slots-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.time-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.embed-code-area {
+  min-height: 360px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
 .app-header {
   display: flex;
   align-items: flex-start;
@@ -317,7 +396,7 @@ h1 {
 }
 
 .hidden-panel {
-  display: none;
+  display: none !important;
 }
 
 .form {

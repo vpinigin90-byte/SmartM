@@ -23,18 +23,30 @@
           </p>
         </div>
 
-        <section class="booking-panel" aria-labelledby="booking-title">
+        <section class="booking-panel smartm-widget" aria-labelledby="booking-title">
           <div class="results-head">
             <div>
-              <h2 id="booking-title">Доступные слоты</h2>
-              <p id="booking-summary" class="summary">Загружаем ближайшие варианты для демо.</p>
+              <h2 id="booking-title">Выберите дату</h2>
+              <p id="booking-summary" class="summary">Сначала выберите удобный день, затем время демо.</p>
             </div>
             <button id="refresh-slots-button" class="ghost-button" type="button">Обновить</button>
           </div>
 
           <div id="booking-status" class="status" aria-live="polite"></div>
-          <div id="public-slots" class="slots empty">
-            <p>Слоты загружаются.</p>
+          <div id="public-dates" class="date-grid empty">
+            <p>Даты загружаются.</p>
+          </div>
+          <div id="public-slots-panel" class="slots-panel hidden-panel">
+            <div class="results-head compact-head">
+              <div>
+                <h3>Доступное время</h3>
+                <p id="selected-date-summary" class="summary"></p>
+              </div>
+              <button id="change-date-button" class="ghost-button" type="button">Другая дата</button>
+            </div>
+            <div id="public-slots" class="time-grid empty">
+              <p>Выберите дату.</p>
+            </div>
           </div>
         </section>
       </section>
@@ -62,10 +74,35 @@
             </label>
           </div>
 
-          <label class="field">
-            <span>Телефон</span>
-            <input id="client-phone" type="tel" autocomplete="tel" placeholder="+7 999 000-00-00" required />
-          </label>
+          <div class="split">
+            <label class="field">
+              <span>Телефон</span>
+              <input id="client-phone" type="tel" autocomplete="tel" placeholder="+7 999 000-00-00" required />
+            </label>
+            <label class="field">
+              <span>Наименование компании</span>
+              <input id="company-name" type="text" autocomplete="organization" placeholder="ООО Scrolltool" required />
+            </label>
+          </div>
+
+          <div class="split">
+            <label class="field">
+              <span>Должность</span>
+              <select id="client-position" required>
+                <option value="">Выберите должность</option>
+                <option value="Разработчик курсов">Разработчик курсов</option>
+                <option value="Методист онлайн-курсов">Методист онлайн-курсов</option>
+                <option value="Бизнес-тренер">Бизнес-тренер</option>
+                <option value="Руководитель обучения">Руководитель обучения</option>
+                <option value="HR-директор">HR-директор</option>
+                <option value="Другое">Другое</option>
+              </select>
+            </label>
+            <label id="custom-position-field" class="field hidden-panel">
+              <span>Своя должность</span>
+              <input id="custom-position" type="text" placeholder="Укажите должность" />
+            </label>
+          </div>
 
           <label class="field">
             <span>Комментарий</span>

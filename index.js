@@ -76,6 +76,12 @@ function json(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function setPublicCorsHeaders(response) {
+  response.setHeader("Access-Control-Allow-Origin", "*");
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
 function redirect(response, location) {
   response.writeHead(302, { Location: location });
   response.end();
@@ -1464,12 +1470,14 @@ function normalizeBookingPayload(body) {
   const clientName = String(body.clientName || body.name || "").trim();
   const clientEmail = String(body.clientEmail || body.email || "").trim();
   const clientPhone = String(body.clientPhone || body.phone || "").trim();
+  const companyName = String(body.companyName || body.company || "").trim();
+  const position = String(body.position || body.clientPosition || "").trim();
   const start = String(body.start || body.startIso || "").trim();
   const end = String(body.end || body.endIso || "").trim();
   const comment = String(body.comment || "").trim();
   const rules = getPublicSlotRules(body);
 
-  if (!clientName || !clientEmail || !clientPhone) {
+  if (!clientName || !clientEmail || !clientPhone || !companyName || !position) {
     const error = new Error("Missing client fields");
     error.statusCode = 400;
     throw error;
@@ -1504,6 +1512,8 @@ function normalizeBookingPayload(body) {
     clientName,
     clientEmail,
     clientPhone,
+    companyName,
+    position,
     start,
     end,
     comment,
@@ -1592,6 +1602,8 @@ async function createPublicBooking(booking) {
     `Клиент: ${booking.clientName}`,
     `Email: ${booking.clientEmail}`,
     `Телефон: ${booking.clientPhone}`,
+    `Компания: ${booking.companyName}`,
+    `Должность: ${booking.position}`,
     booking.comment ? `Комментарий: ${booking.comment}` : "",
   ]
     .filter(Boolean)
@@ -1599,7 +1611,7 @@ async function createPublicBooking(booking) {
   const eventUrl = buildEventUrl(target.writableCalendar.url, uid);
   const eventIcs = buildEventIcs({
     uid,
-    summary: `Демо SmartM: ${booking.clientName}`,
+    summary: `Демо Scrolltool для ${booking.companyName}`,
     description,
     location: "Онлайн",
     start: booking.start,
@@ -1667,6 +1679,7 @@ function handleCalDavError(response, error, fallbackMessage) {
 }
 
 function handlePublicError(response, error) {
+  setPublicCorsHeaders(response);
   const statusCode = error.statusCode === 400 || error.statusCode === 409 ? error.statusCode : 500;
   const message =
     statusCode === 400
@@ -1679,6 +1692,15 @@ function handlePublicError(response, error) {
 }
 
 async function handleApi(request, requestUrl, response) {
+  if (requestUrl.pathname.startsWith("/api/public/")) {
+    setPublicCorsHeaders(response);
+    if (request.method === "OPTIONS") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+  }
+
   if (request.method === "POST" && requestUrl.pathname === "/api/admin/login") {
     const body = await readRequestBody(request);
     const username = String(body.username || "").trim();
