@@ -3,23 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartM Calendar Slots</title>
+    <title>SmartM Admin</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="card">
+    <main class="shell admin-shell">
+      <section id="login-view" class="auth-card">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">SM</div>
+          <div>
+            <p class="eyebrow">SmartM Admin</p>
+            <h1>Вход в админ-панель</h1>
+          </div>
+        </div>
+        <p class="summary">
+          Служебный доступ к сотрудникам, календарям и правилам доступности.
+        </p>
+        <form id="login-form" class="form">
+          <label class="field">
+            <span>Логин</span>
+            <input id="admin-username" type="text" autocomplete="username" value="admin" required />
+          </label>
+          <label class="field">
+            <span>Пароль</span>
+            <input id="admin-password" type="password" autocomplete="current-password" required />
+          </label>
+          <button id="login-button" class="primary-button" type="submit">Войти</button>
+        </form>
+        <div id="login-status" class="status" aria-live="polite"></div>
+      </section>
+
+      <section id="admin-view" class="card hidden-panel">
         <header class="app-header">
           <div class="brand-lockup">
             <div class="brand-mark" aria-hidden="true">SM</div>
             <div>
-              <p class="eyebrow">SmartM</p>
+              <p class="eyebrow">SmartM Admin</p>
               <h1>Панель управления встречами</h1>
             </div>
           </div>
           <div class="header-actions" aria-label="Интеграции">
             <span class="status-pill">Mail.ru CalDAV</span>
-            <span class="status-pill muted-pill">Без внешних зависимостей</span>
+            <button id="logout-button" class="ghost-button" type="button">Выйти</button>
           </div>
         </header>
 
@@ -96,6 +121,11 @@
                 <label class="field">
                   <span>E-mail</span>
                   <input id="email" name="email" type="email" placeholder="name@mail.ru" required />
+                </label>
+
+                <label class="field">
+                  <span>Приоритет назначения</span>
+                  <input id="employee-priority" name="employee-priority" type="number" min="1" step="1" value="100" required />
                 </label>
 
                 <label class="field">
@@ -306,6 +336,6 @@
       </section>
     </main>
 
-    <script src="/app.js"></script>
+    <script src="/admin.js"></script>
   </body>
 </html>

@@ -13,6 +13,18 @@ const MAIL_RU_CALDAV_URLS = [
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const CONFIG_PATH = path.join(DATA_DIR, "smartm-config.json");
+const ADMIN_USERNAME = "admin";
+const ADMIN_PASSWORD = "Zz123456";
+const SESSION_COOKIE = "smartm_admin";
+const SESSION_SECRET = "smartm-temporary-admin-session-secret";
+const PUBLIC_DEMO_DURATION_MINUTES = 60;
+const PUBLIC_DEMO_GAP_MINUTES = 30;
+const DEFAULT_SLOT_RULES = {
+  allowedStartTime: "09:00",
+  allowedEndTime: "18:00",
+  timeZone: "Europe/Moscow",
+  excludedDates: [],
+};
 
 function normalizeConfig(config = {}) {
   if (Array.isArray(config.employees)) {
@@ -22,6 +34,7 @@ function normalizeConfig(config = {}) {
         name: String(employee.name || employee.email || "Сотрудник").trim(),
         email: String(employee.email || "").trim(),
         password: String(employee.password || "").trim(),
+        priority: Math.max(1, Number(employee.priority) || 100),
       })),
       activeEmployeeId: config.activeEmployeeId ? String(config.activeEmployeeId) : null,
     };
@@ -42,6 +55,7 @@ function normalizeConfig(config = {}) {
         name: email || "Сотрудник",
         email,
         password,
+        priority: 1,
       },
     ],
     activeEmployeeId: employeeId,
@@ -60,6 +74,78 @@ function getActiveEmployee(config) {
 function json(response, statusCode, payload) {
   response.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
+}
+
+function redirect(response, location) {
+  response.writeHead(302, { Location: location });
+  response.end();
+}
+
+function parseCookies(request) {
+  return Object.fromEntries(
+    String(request.headers.cookie || "")
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separatorIndex = part.indexOf("=");
+        if (separatorIndex === -1) {
+          return [part, ""];
+        }
+
+        return [
+          decodeURIComponent(part.slice(0, separatorIndex)),
+          decodeURIComponent(part.slice(separatorIndex + 1)),
+        ];
+      }),
+  );
+}
+
+function signSessionPayload(payload) {
+  return crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+}
+
+function createSessionCookie() {
+  const payload = Buffer.from(
+    JSON.stringify({
+      username: ADMIN_USERNAME,
+      expiresAt: Date.now() + 12 * 60 * 60 * 1000,
+    }),
+    "utf8",
+  ).toString("base64url");
+  const signature = signSessionPayload(payload);
+
+  return `${SESSION_COOKIE}=${encodeURIComponent(`${payload}.${signature}`)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200`;
+}
+
+function clearSessionCookie() {
+  return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+}
+
+function isAdminRequest(request) {
+  const token = parseCookies(request)[SESSION_COOKIE];
+  if (!token || !token.includes(".")) {
+    return false;
+  }
+
+  const [payload, signature] = token.split(".");
+  const expectedSignature = signSessionPayload(payload);
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return false;
+  }
+
+  try {
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return session.username === ADMIN_USERNAME && Number(session.expiresAt) > Date.now();
+  } catch {
+    return false;
+  }
 }
 
 function basicAuthHeader(email, password) {
@@ -99,6 +185,14 @@ function escapeIcsText(value) {
     .replaceAll(",", "\\,")
     .replaceAll("\r\n", "\\n")
     .replaceAll("\n", "\\n");
+}
+
+function escapeIcsParam(value) {
+  return String(value || "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("\r\n", " ")
+    .replaceAll("\n", " ");
 }
 
 function stripXml(value) {
@@ -669,6 +763,18 @@ function buildEventIcs(eventData) {
 
   if (location) {
     lines.push(`LOCATION:${location}`);
+  }
+
+  if (Array.isArray(eventData.attendees)) {
+    for (const attendee of eventData.attendees) {
+      const email = String(attendee.email || "").trim();
+      if (!email) {
+        continue;
+      }
+
+      const name = escapeIcsParam(attendee.name || email);
+      lines.push(`ATTENDEE;CN="${name}";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${email}`);
+    }
   }
 
   lines.push("END:VEVENT", "END:VCALENDAR", "");
@@ -1306,6 +1412,217 @@ async function fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso, 
   };
 }
 
+function getPublicSlotRules(source = {}) {
+  return {
+    excludedDates: Array.isArray(source.excludedDates)
+      ? source.excludedDates
+      : String(source.excludedDates || "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+    allowedStartTime: String(source.allowedStartTime || DEFAULT_SLOT_RULES.allowedStartTime).trim(),
+    allowedEndTime: String(source.allowedEndTime || DEFAULT_SLOT_RULES.allowedEndTime).trim(),
+    timeZone: String(source.timeZone || DEFAULT_SLOT_RULES.timeZone).trim(),
+  };
+}
+
+function getDefaultPublicRange() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+
+  return {
+    rangeStartIso: start.toISOString(),
+    rangeEndIso: end.toISOString(),
+  };
+}
+
+function sortEmployeesForBooking(employees) {
+  return employees
+    .map((employee, index) => ({ employee, index }))
+    .sort((left, right) => {
+      const priorityDiff = Number(left.employee.priority || 100) - Number(right.employee.priority || 100);
+      return priorityDiff || left.index - right.index;
+    })
+    .map((item) => item.employee);
+}
+
+function slotKey(slot) {
+  return `${slot.start}|${slot.end}`;
+}
+
+function intervalsOverlap(leftStartIso, leftEndIso, rightStartIso, rightEndIso) {
+  return new Date(leftStartIso) < new Date(rightEndIso) && new Date(leftEndIso) > new Date(rightStartIso);
+}
+
+function isSlotAllowedByRules(startIso, endIso, rules) {
+  return filterMeetingSlotsByRules([{ start: startIso, end: endIso }], rules).length === 1;
+}
+
+function normalizeBookingPayload(body) {
+  const clientName = String(body.clientName || body.name || "").trim();
+  const clientEmail = String(body.clientEmail || body.email || "").trim();
+  const clientPhone = String(body.clientPhone || body.phone || "").trim();
+  const start = String(body.start || body.startIso || "").trim();
+  const end = String(body.end || body.endIso || "").trim();
+  const comment = String(body.comment || "").trim();
+  const rules = getPublicSlotRules(body);
+
+  if (!clientName || !clientEmail || !clientPhone) {
+    const error = new Error("Missing client fields");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
+    const error = new Error("Invalid client email");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) {
+    const error = new Error("Invalid booking interval");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const durationMinutes = (new Date(end).getTime() - new Date(start).getTime()) / 60000;
+  if (durationMinutes !== PUBLIC_DEMO_DURATION_MINUTES) {
+    const error = new Error("Invalid booking duration");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!isSlotAllowedByRules(start, end, rules)) {
+    const error = new Error("Slot is outside booking rules");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    clientName,
+    clientEmail,
+    clientPhone,
+    start,
+    end,
+    comment,
+    rules,
+  };
+}
+
+async function getPublicSlots(rangeStartIso, rangeEndIso, rules = {}) {
+  const config = await loadConfig();
+  const employees = sortEmployeesForBooking(config.employees).filter(
+    (employee) => employee.email && employee.password,
+  );
+  const slotsByKey = new Map();
+
+  for (const employee of employees) {
+    try {
+      const result = await fetchBusyIntervals(employee.email, employee.password, rangeStartIso, rangeEndIso);
+      const employeeSlots = filterMeetingSlotsByRules(
+        buildMeetingSlotsFromBusy(
+          result.busy,
+          rangeStartIso,
+          rangeEndIso,
+          PUBLIC_DEMO_DURATION_MINUTES,
+          PUBLIC_DEMO_GAP_MINUTES,
+        ),
+        rules,
+      );
+
+      for (const slot of employeeSlots) {
+        if (!slotsByKey.has(slotKey(slot))) {
+          slotsByKey.set(slotKey(slot), slot);
+        }
+      }
+    } catch {
+      // Public availability should degrade quietly when one employee calendar is unavailable.
+    }
+  }
+
+  return [...slotsByKey.values()].sort((left, right) => new Date(left.start) - new Date(right.start));
+}
+
+async function findEmployeeForBooking(startIso, endIso, rules = {}) {
+  const config = await loadConfig();
+  const employees = sortEmployeesForBooking(config.employees).filter(
+    (employee) => employee.email && employee.password,
+  );
+
+  for (const employee of employees) {
+    try {
+      const result = await fetchBusyIntervals(employee.email, employee.password, startIso, endIso);
+      const hasOverlap = result.busy.some((interval) =>
+        intervalsOverlap(interval.start, interval.end, startIso, endIso),
+      );
+      if (hasOverlap || !isSlotAllowedByRules(startIso, endIso, rules)) {
+        continue;
+      }
+
+      const calendars = result.calendars.length
+        ? result.calendars
+        : await getCalendarsForUser(employee.email, employee.password);
+      const writableCalendar = findWritableCalendar(calendars, null);
+      if (!writableCalendar || writableCalendar.canWrite === false) {
+        continue;
+      }
+
+      return { employee, writableCalendar };
+    } catch {
+      // Try the next employee by priority.
+    }
+  }
+
+  return null;
+}
+
+async function createPublicBooking(booking) {
+  const target = await findEmployeeForBooking(booking.start, booking.end, booking.rules);
+  if (!target) {
+    const error = new Error("No available employee");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const uid = crypto.randomUUID();
+  const description = [
+    "Заявка на демо через SmartM.",
+    `Клиент: ${booking.clientName}`,
+    `Email: ${booking.clientEmail}`,
+    `Телефон: ${booking.clientPhone}`,
+    booking.comment ? `Комментарий: ${booking.comment}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const eventUrl = buildEventUrl(target.writableCalendar.url, uid);
+  const eventIcs = buildEventIcs({
+    uid,
+    summary: `Демо SmartM: ${booking.clientName}`,
+    description,
+    location: "Онлайн",
+    start: booking.start,
+    end: booking.end,
+    attendees: [
+      {
+        name: booking.clientName,
+        email: booking.clientEmail,
+      },
+    ],
+  });
+
+  await putCalendarObject(target.employee.email, target.employee.password, eventUrl, eventIcs, {
+    ifNoneMatch: true,
+  });
+
+  return {
+    ok: true,
+    start: booking.start,
+    end: booking.end,
+  };
+}
+
 function serveFile(filePath, response) {
   const contentType =
     filePath.endsWith(".css")
@@ -1349,7 +1666,94 @@ function handleCalDavError(response, error, fallbackMessage) {
   });
 }
 
+function handlePublicError(response, error) {
+  const statusCode = error.statusCode === 400 || error.statusCode === 409 ? error.statusCode : 500;
+  const message =
+    statusCode === 400
+      ? "Проверьте данные бронирования."
+      : statusCode === 409
+        ? "Этот слот уже недоступен. Выберите другое время."
+        : "Не удалось выполнить бронирование. Попробуйте позже.";
+
+  return json(response, statusCode, { error: message });
+}
+
 async function handleApi(request, requestUrl, response) {
+  if (request.method === "POST" && requestUrl.pathname === "/api/admin/login") {
+    const body = await readRequestBody(request);
+    const username = String(body.username || "").trim();
+    const password = String(body.password || "").trim();
+
+    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+      return json(response, 401, { error: "Неверный логин или пароль." });
+    }
+
+    response.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": createSessionCookie(),
+    });
+    response.end(JSON.stringify({ ok: true, username: ADMIN_USERNAME }));
+    return;
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/admin/logout") {
+    response.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": clearSessionCookie(),
+    });
+    response.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/admin/session") {
+    return json(response, 200, {
+      authenticated: isAdminRequest(request),
+      username: isAdminRequest(request) ? ADMIN_USERNAME : null,
+    });
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/public/slots") {
+    const defaultRange = getDefaultPublicRange();
+    const rangeStartIso = String(requestUrl.searchParams.get("rangeStartIso") || defaultRange.rangeStartIso).trim();
+    const rangeEndIso = String(requestUrl.searchParams.get("rangeEndIso") || defaultRange.rangeEndIso).trim();
+    const rules = getPublicSlotRules({
+      allowedStartTime: requestUrl.searchParams.get("allowedStartTime"),
+      allowedEndTime: requestUrl.searchParams.get("allowedEndTime"),
+      timeZone: requestUrl.searchParams.get("timeZone"),
+      excludedDates: requestUrl.searchParams.get("excludedDates"),
+    });
+
+    if (Number.isNaN(Date.parse(rangeStartIso)) || Number.isNaN(Date.parse(rangeEndIso))) {
+      return json(response, 400, { error: "Некорректный диапазон поиска слотов." });
+    }
+
+    try {
+      const slots = await getPublicSlots(rangeStartIso, rangeEndIso, rules);
+      return json(response, 200, {
+        slots,
+        durationMinutes: PUBLIC_DEMO_DURATION_MINUTES,
+        gapMinutes: PUBLIC_DEMO_GAP_MINUTES,
+        timeZone: rules.timeZone,
+      });
+    } catch (error) {
+      return handlePublicError(response, error);
+    }
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/public/bookings") {
+    try {
+      const booking = normalizeBookingPayload(await readRequestBody(request));
+      const result = await createPublicBooking(booking);
+      return json(response, 201, result);
+    } catch (error) {
+      return handlePublicError(response, error);
+    }
+  }
+
+  if (!isAdminRequest(request)) {
+    return json(response, 401, { error: "Требуется вход администратора." });
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/config") {
     const config = await loadConfig();
     return json(response, 200, config);
@@ -1391,6 +1795,7 @@ async function handleApi(request, requestUrl, response) {
       name,
       email,
       password,
+      priority: Math.max(1, Number(body.priority) || 100),
     });
 
     const nextConfig = {
@@ -1592,6 +1997,16 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === "/") {
+      redirect(response, "/booking");
+      return;
+    }
+
+    if (requestUrl.pathname === "/booking") {
+      await serveFile(path.join(PUBLIC_DIR, "booking.html"), response);
+      return;
+    }
+
+    if (requestUrl.pathname === "/admin") {
       await serveFile(path.join(PUBLIC_DIR, "index.html"), response);
       return;
     }

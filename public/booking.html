@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartM Demo Booking</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="booking-page">
+    <main class="booking-shell">
+      <section class="booking-hero">
+        <div class="booking-copy">
+          <div class="brand-lockup">
+            <div class="brand-mark" aria-hidden="true">SM</div>
+            <div>
+              <p class="eyebrow">SmartM</p>
+              <h1>Выберите время для демонстрации сервиса</h1>
+            </div>
+          </div>
+          <p class="booking-lead">
+            Показываем только свободные окна команды. После записи встреча появится в календаре,
+            а на указанный e-mail будет добавлен участник события.
+          </p>
+        </div>
+
+        <section class="booking-panel" aria-labelledby="booking-title">
+          <div class="results-head">
+            <div>
+              <h2 id="booking-title">Доступные слоты</h2>
+              <p id="booking-summary" class="summary">Загружаем ближайшие варианты для демо.</p>
+            </div>
+            <button id="refresh-slots-button" class="ghost-button" type="button">Обновить</button>
+          </div>
+
+          <div id="booking-status" class="status" aria-live="polite"></div>
+          <div id="public-slots" class="slots empty">
+            <p>Слоты загружаются.</p>
+          </div>
+        </section>
+      </section>
+
+      <section id="booking-form-panel" class="booking-panel hidden-panel" aria-labelledby="client-form-title">
+        <div class="results-head">
+          <div>
+            <h2 id="client-form-title">Данные для приглашения</h2>
+            <p id="selected-slot-summary" class="summary"></p>
+          </div>
+        </div>
+
+        <form id="booking-form" class="form">
+          <input id="booking-start" type="hidden" />
+          <input id="booking-end" type="hidden" />
+
+          <div class="split">
+            <label class="field">
+              <span>Имя</span>
+              <input id="client-name" type="text" autocomplete="name" placeholder="Анна Иванова" required />
+            </label>
+            <label class="field">
+              <span>E-mail</span>
+              <input id="client-email" type="email" autocomplete="email" placeholder="name@example.com" required />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Телефон</span>
+            <input id="client-phone" type="tel" autocomplete="tel" placeholder="+7 999 000-00-00" required />
+          </label>
+
+          <label class="field">
+            <span>Комментарий</span>
+            <textarea id="client-comment" rows="3" placeholder="Что хотите обсудить на демо"></textarea>
+          </label>
+
+          <div class="actions">
+            <button id="book-slot-button" class="primary-button" type="submit">Забронировать демо</button>
+            <button id="cancel-booking-button" class="ghost-button" type="button">Выбрать другое время</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="/booking.js"></script>
+  </body>
+</html>

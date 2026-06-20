@@ -59,6 +59,66 @@ select {
   margin: 0 auto;
 }
 
+.auth-card,
+.booking-shell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+}
+
+.auth-card {
+  display: grid;
+  gap: 18px;
+  max-width: 460px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-md);
+}
+
+.auth-card h1 {
+  font-size: 30px;
+}
+
+.booking-shell {
+  display: grid;
+  gap: 20px;
+}
+
+.booking-hero {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(360px, 1.18fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.booking-copy,
+.booking-panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
+.booking-copy {
+  display: grid;
+  gap: 22px;
+  padding: 28px;
+  position: sticky;
+  top: 24px;
+}
+
+.booking-lead {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.booking-panel {
+  padding: 22px;
+}
+
 .app-header {
   display: flex;
   align-items: flex-start;
@@ -552,6 +612,15 @@ button:disabled {
   color: var(--accent-foreground);
 }
 
+.public-slot-item {
+  align-items: center;
+}
+
+.public-slot-item button {
+  min-height: 34px;
+  padding: 7px 12px;
+}
+
 .event-item {
   border-color: rgba(154, 52, 18, 0.14);
   background: var(--warning);
@@ -607,8 +676,13 @@ button:disabled {
 @media (max-width: 1020px) {
   .hero,
   .employees-layout,
-  .workspace {
+  .workspace,
+  .booking-hero {
     grid-template-columns: 1fr;
+  }
+
+  .booking-copy {
+    position: static;
   }
 
   .overview-grid {
@@ -665,6 +739,8 @@ button:disabled {
 
   .panel,
   .results,
+  .booking-copy,
+  .booking-panel,
   .lead,
   .hero > .lead {
     padding: 18px;
