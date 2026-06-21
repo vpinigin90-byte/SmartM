@@ -25,6 +25,9 @@ const checkButton = document.querySelector("#check-button");
 const reloadCalendarsButton = document.querySelector("#reload-calendars-button");
 const loadEventsButton = document.querySelector("#load-events-button");
 const addEmployeeButton = document.querySelector("#add-employee-button");
+const employeeModal = document.querySelector("#employee-modal");
+const closeEmployeeModalButton = document.querySelector("#close-employee-modal");
+const employeeModalBackdrop = document.querySelector("[data-close-employee-modal]");
 const toggleEventFormButton = document.querySelector("#toggle-event-form-button");
 const loadMeetingSlotsButton = document.querySelector("#load-meeting-slots-button");
 const meetingEmployeeASelect = document.querySelector("#meeting-employee-a");
@@ -57,114 +60,66 @@ const copyEmbedCodeButton = document.querySelector("#copy-embed-code-button");
 const tabButtons = [...document.querySelectorAll(".tab-button")];
 const tabPanels = [...document.querySelectorAll("[data-tab-panel]")];
 
-const EMBED_CODE = String.raw`<div class="scrolltool-demo-widget">
+const EMBED_CODE = String.raw`<div class="scrolltool-booking-embed">
   <style>
-    .scrolltool-demo-widget{max-width:780px;margin:0 auto;padding:26px;border:1px solid rgba(228,228,231,.92);border-radius:14px;background:#fff;color:#18181b;font-family:Inter,"Segoe UI",Arial,sans-serif;box-shadow:0 18px 48px rgba(24,24,27,.08)}
-    .scrolltool-demo-widget *{box-sizing:border-box}
-    .scrolltool-demo-widget h2{margin:0 0 8px;font-size:26px;line-height:1.15}
-    .scrolltool-demo-widget h3{margin:0 0 10px;font-size:18px}
-    .scrolltool-demo-widget p{margin:0;color:#71717a;line-height:1.5}
-    .scrolltool-demo-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}
-    .scrolltool-demo-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 18px;padding:4px;border:1px solid #e4e4e7;border-radius:12px;background:#f4f4f2;list-style:none}
-    .scrolltool-demo-step{display:flex;align-items:center;justify-content:center;gap:8px;min-height:38px;border-radius:9px;color:#71717a;font-size:13px;font-weight:800}
-    .scrolltool-demo-step span{display:grid;place-items:center;width:22px;height:22px;border-radius:999px;background:#fff;color:#71717a;font-size:12px}
-    .scrolltool-demo-step.is-active{background:#fff;color:#18181b;box-shadow:0 1px 2px rgba(24,24,27,.05)}
-    .scrolltool-demo-step.is-complete{color:#14532d}
-    .scrolltool-demo-step.is-active span,.scrolltool-demo-step.is-complete span{background:#18181b;color:#fafafa}
-    .scrolltool-demo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(142px,1fr));gap:10px;margin-top:16px}
-    .scrolltool-demo-times{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
-    .scrolltool-demo-date,.scrolltool-demo-time,.scrolltool-demo-button,.scrolltool-demo-secondary{min-height:42px;border:1px solid #e4e4e7;border-radius:8px;padding:10px 12px;background:#fff;color:#18181b;font:inherit;font-weight:700;cursor:pointer;text-align:left}
-    .scrolltool-demo-date,.scrolltool-demo-time{min-height:72px;background:linear-gradient(180deg,#fff,#fbfbfa);box-shadow:0 8px 22px rgba(24,24,27,.04)}
-    .scrolltool-demo-date span{display:block;margin-top:4px;color:#71717a;font-size:12px}
-    .scrolltool-demo-date.is-active,.scrolltool-demo-time.is-active,.scrolltool-demo-date:hover,.scrolltool-demo-time:hover{border-color:rgba(20,83,45,.28);background:linear-gradient(180deg,#f3fbf6,#ecf7f0);color:#14532d;box-shadow:0 10px 26px rgba(20,83,45,.1)}
-    .scrolltool-demo-button{background:#18181b;color:#fafafa;text-align:center}
-    .scrolltool-demo-secondary{text-align:center;background:#f4f4f2}
-    .scrolltool-demo-form{display:grid;gap:12px;margin-top:18px}
-    .scrolltool-demo-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-    .scrolltool-demo-field{display:grid;gap:7px}
-    .scrolltool-demo-field span{font-size:13px;font-weight:700}
-    .scrolltool-demo-field small{color:#71717a;font-size:12px;line-height:1.35}
-    .scrolltool-demo-field input,.scrolltool-demo-field select,.scrolltool-demo-field textarea{width:100%;min-height:42px;border:1px solid #dedee3;border-radius:8px;padding:10px 12px;font:inherit}
-    .scrolltool-demo-field textarea{min-height:92px;resize:vertical}
-    .scrolltool-demo-status{display:none;margin:14px 0 0;padding:12px 14px;border:1px solid #e4e4e7;border-radius:8px;background:#f4f4f2;color:#71717a}
-    .scrolltool-demo-status.is-visible{display:block}
-    .scrolltool-demo-status.is-success{border-color:rgba(20,83,45,.18);background:#ecf7f0;color:#14532d}
-    .scrolltool-demo-status.is-error{border-color:rgba(185,28,28,.2);background:#fef2f2;color:#b91c1c}
-    .scrolltool-demo-hidden{display:none!important}
-    @media(max-width:640px){.scrolltool-demo-widget{padding:18px}.scrolltool-demo-head,.scrolltool-demo-split{display:grid;grid-template-columns:1fr}}
+    .scrolltool-booking-embed {
+      width: 100%;
+      margin: 24px 0;
+    }
+
+    .scrolltool-booking-embed iframe {
+      display: block;
+      width: 100%;
+      height: 960px;
+      border: 0;
+      border-radius: 20px;
+      background: #ffffff;
+      box-shadow: 0 18px 48px rgba(24, 24, 27, 0.08);
+      overflow: hidden;
+    }
+
+    @media (max-width: 768px) {
+      .scrolltool-booking-embed {
+        margin: 16px 0;
+      }
+
+      .scrolltool-booking-embed iframe {
+        border-radius: 16px;
+      }
+    }
   </style>
-  <div class="scrolltool-demo-head">
-    <div>
-      <h2>Выберите время для демо Scrolltool</h2>
-      <p data-summary>Сначала выберите дату, затем удобное время.</p>
-    </div>
-    <button class="scrolltool-demo-secondary" type="button" data-refresh>Обновить</button>
-  </div>
-  <ol class="scrolltool-demo-steps" aria-label="Шаги бронирования">
-    <li class="scrolltool-demo-step is-active" data-step="date"><span>1</span>Дата</li>
-    <li class="scrolltool-demo-step" data-step="time"><span>2</span>Время</li>
-    <li class="scrolltool-demo-step" data-step="details"><span>3</span>Данные</li>
-  </ol>
-  <div class="scrolltool-demo-status" data-status></div>
-  <div class="scrolltool-demo-grid" data-dates><p>Загружаем даты...</p></div>
-  <div class="scrolltool-demo-hidden" data-time-panel>
-    <h3 data-date-title></h3>
-    <div class="scrolltool-demo-times" data-times></div>
-  </div>
-  <form class="scrolltool-demo-form scrolltool-demo-hidden" data-form>
-    <p data-slot-title></p>
-    <div class="scrolltool-demo-split">
-      <label class="scrolltool-demo-field"><span>Имя</span><input data-name autocomplete="name" required></label>
-      <label class="scrolltool-demo-field"><span>E-mail</span><input data-email type="email" autocomplete="email" required></label>
-    </div>
-    <div class="scrolltool-demo-split">
-      <label class="scrolltool-demo-field"><span>Телефон</span><input data-phone type="tel" autocomplete="tel" required></label>
-      <label class="scrolltool-demo-field"><span>Наименование компании</span><input data-company autocomplete="organization" required></label>
-    </div>
-    <div class="scrolltool-demo-split">
-      <label class="scrolltool-demo-field"><span>Должность</span><select data-position required><option value="">Выберите должность</option><option>Разработчик курсов</option><option>Методист онлайн-курсов</option><option>Бизнес-тренер</option><option>Руководитель обучения</option><option>HR-директор</option><option>Другое</option></select></label>
-      <label class="scrolltool-demo-field scrolltool-demo-hidden" data-custom-wrap><span>Своя должность</span><input data-custom-position></label>
-    </div>
-    <label class="scrolltool-demo-field"><span>Добавить других участников встречи</span><textarea data-additional-attendees placeholder="email1@example.com, email2@example.com"></textarea><small>Можно указать несколько email через запятую.</small></label>
-    <label class="scrolltool-demo-field"><span>Комментарий</span><textarea data-comment placeholder="Что хотите обсудить на демо"></textarea></label>
-    <button class="scrolltool-demo-button" type="submit" data-submit>Забронировать демо</button>
-  </form>
+
+  <iframe
+    id="scrolltool-booking-frame"
+    src="https://meet.scroll-tool.ru/booking?embed=1"
+    title="Выбор времени для встречи Scrolltool"
+    loading="lazy"
+    allow="clipboard-write"
+  ></iframe>
+
   <script>
-  (function(){
-    var root=document.currentScript.closest('.scrolltool-demo-widget');
-    var SLOTS_ENDPOINT='https://meet.scroll-tool.ru/api/public/slots';
-    var BOOKINGS_ENDPOINT='https://meet.scroll-tool.ru/api/public/bookings';
-    var state={slots:[],byDay:new Map(),day:null,slot:null};
-    var dates=root.querySelector('[data-dates]');
-    var times=root.querySelector('[data-times]');
-    var timePanel=root.querySelector('[data-time-panel]');
-    var form=root.querySelector('[data-form]');
-    var status=root.querySelector('[data-status]');
-    var refresh=root.querySelector('[data-refresh]');
-    var position=root.querySelector('[data-position]');
-    var customWrap=root.querySelector('[data-custom-wrap]');
-    var customPosition=root.querySelector('[data-custom-position]');
-    var steps=Array.prototype.slice.call(root.querySelectorAll('[data-step]'));
-    function esc(value){return String(value||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;")}
-    function dayStart(date){return new Date(date.getFullYear(),date.getMonth(),date.getDate())}
-    function fmtDate(date){return new Intl.DateTimeFormat('ru-RU',{weekday:'long',day:'numeric',month:'long'}).format(date)}
-    function fmtShort(date){return new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short'}).format(date)}
-    function fmtTime(date){return new Intl.DateTimeFormat('ru-RU',{hour:'2-digit',minute:'2-digit'}).format(date)}
-    function setStatus(text,kind){status.textContent=text;status.className='scrolltool-demo-status'+(text?' is-visible':'')+(kind?' is-'+kind:'')}
-    function setStep(name){var order=['date','time','details'];var active=order.indexOf(name);steps.forEach(function(step){var index=order.indexOf(step.dataset.step);step.classList.toggle('is-active',index===active);step.classList.toggle('is-complete',index<active)})}
-    function range(){var start=dayStart(new Date());var end=new Date(start);end.setDate(end.getDate()+7);return{start:start,end:end}}
-    function group(slots){var map=new Map();slots.forEach(function(slot){var key=dayStart(new Date(slot.start)).toISOString();if(!map.has(key))map.set(key,[]);map.get(key).push(slot)});return map}
-    function renderDates(){if(!state.byDay.size){dates.innerHTML='<p>Свободных дат пока нет.</p>';return}dates.innerHTML=Array.from(state.byDay.entries()).map(function(item){var key=item[0],list=item[1],date=new Date(key);return '<button class="scrolltool-demo-date'+(key===state.day?' is-active':'')+'" type="button" data-day="'+esc(key)+'"><strong>'+fmtShort(date)+'</strong><span>'+list.length+' слотов</span></button>'}).join('')}
-    function renderTimes(){var list=state.byDay.get(state.day)||[];root.querySelector('[data-date-title]').textContent=fmtDate(new Date(state.day));times.innerHTML=list.map(function(slot){return '<button class="scrolltool-demo-time" type="button" data-start="'+esc(slot.start)+'" data-end="'+esc(slot.end)+'">'+fmtTime(new Date(slot.start))+' - '+fmtTime(new Date(slot.end))+'</button>'}).join('');timePanel.classList.remove('scrolltool-demo-hidden')}
-    function load(){var r=range();refresh.disabled=true;setStatus('Загружаем свободные даты...','');var params=new URLSearchParams({rangeStartIso:r.start.toISOString(),rangeEndIso:r.end.toISOString(),allowedStartTime:'09:00',allowedEndTime:'18:00',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});return fetch(SLOTS_ENDPOINT+'?'+params.toString()).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error||'Ошибка запроса.');return data})}).then(function(data){state.slots=data.slots||[];state.byDay=group(state.slots);state.day=null;state.slot=null;timePanel.classList.add('scrolltool-demo-hidden');form.classList.add('scrolltool-demo-hidden');renderDates();setStep('date');setStatus('Даты обновлены.','success')}).catch(function(error){dates.innerHTML='<p>Не удалось загрузить даты.</p>';setStatus(error.message,'error')}).finally(function(){refresh.disabled=false})}
-    function syncCustom(){var custom=position.value==='Другое';customWrap.classList.toggle('scrolltool-demo-hidden',!custom);customPosition.required=custom;if(!custom)customPosition.value=''}
-    dates.addEventListener('click',function(event){var button=event.target.closest('[data-day]');if(!button)return;state.day=button.dataset.day;state.slot=null;form.classList.add('scrolltool-demo-hidden');renderDates();renderTimes();setStep('time')});
-    times.addEventListener('click',function(event){var button=event.target.closest('[data-start][data-end]');if(!button)return;state.slot={start:button.dataset.start,end:button.dataset.end};Array.prototype.slice.call(times.querySelectorAll('.scrolltool-demo-time')).forEach(function(item){item.classList.toggle('is-active',item.dataset.start===state.slot.start&&item.dataset.end===state.slot.end)});root.querySelector('[data-slot-title]').textContent='Вы выбрали '+fmtDate(new Date(state.day))+', '+fmtTime(new Date(state.slot.start))+' - '+fmtTime(new Date(state.slot.end));form.classList.remove('scrolltool-demo-hidden');setStep('details')});
-    position.addEventListener('change',syncCustom);
-    refresh.addEventListener('click',load);
-    form.addEventListener('submit',function(event){event.preventDefault();if(!state.slot){setStatus('Сначала выберите время.','error');return}var finalPosition=position.value==='Другое'?customPosition.value.trim():position.value;if(!finalPosition){setStatus('Укажите должность.','error');return}var submit=root.querySelector('[data-submit]');submit.disabled=true;setStatus('Бронируем встречу...','');fetch(BOOKINGS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start:state.slot.start,end:state.slot.end,clientName:root.querySelector('[data-name]').value.trim(),clientEmail:root.querySelector('[data-email]').value.trim(),clientPhone:root.querySelector('[data-phone]').value.trim(),companyName:root.querySelector('[data-company]').value.trim(),position:finalPosition,additionalAttendees:root.querySelector('[data-additional-attendees]').value.trim(),comment:root.querySelector('[data-comment]').value.trim(),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone})}).then(function(res){return res.json().then(function(data){if(!res.ok)throw new Error(data.error||'Ошибка бронирования.');return data})}).then(function(){form.reset();syncCustom();form.classList.add('scrolltool-demo-hidden');return load().then(function(){setStatus('Готово. Встреча создана в календаре.','success')})}).catch(function(error){setStatus(error.message,'error')}).finally(function(){submit.disabled=false})});
-    syncCustom();setStep('date');load();
-  })();
+    (function () {
+      var iframe = document.getElementById("scrolltool-booking-frame");
+      if (!iframe) {
+        return;
+      }
+
+      function handleResize(event) {
+        if (event.source !== iframe.contentWindow) {
+          return;
+        }
+        if (!event.data || event.data.type !== "scrolltool-booking-resize") {
+          return;
+        }
+        var nextHeight = Number(event.data.height);
+        if (!nextHeight || Number.isNaN(nextHeight)) {
+          return;
+        }
+        iframe.style.height = Math.max(nextHeight, 640) + "px";
+      }
+
+      window.addEventListener("message", handleResize);
+    })();
   </script>
 </div>`;
 
@@ -177,6 +132,7 @@ const state = {
   eventsRangeEnd: null,
   eventFormVisible: false,
   sharedMeetingSlots: [],
+  csrfToken: "",
   meetingRules: {
     excludedDates: [],
     allowedStartTime: "09:00",
@@ -349,6 +305,21 @@ function fillEmployeeForm(employee = null) {
   employeePanelTitle.textContent = activeEmployee.name;
 }
 
+function setEmployeeModalVisible(visible) {
+  employeeModal.classList.toggle("hidden-panel", !visible);
+  employeeModal.setAttribute("aria-hidden", String(!visible));
+  document.body.classList.toggle("modal-open", visible);
+}
+
+function closeEmployeeModal() {
+  setEmployeeModalVisible(false);
+}
+
+function openEmployeeModal(employee = null) {
+  fillEmployeeForm(employee);
+  setEmployeeModalVisible(true);
+}
+
 function startNewEmployee() {
   employeeIdInput.value = "";
   employeeNameInput.value = "";
@@ -356,6 +327,7 @@ function startNewEmployee() {
   passwordInput.value = "";
   employeePriorityInput.value = "100";
   employeePanelTitle.textContent = "Новый сотрудник";
+  openEmployeeModal(null);
 }
 
 function applyEmployeesConfig(config) {
@@ -656,7 +628,13 @@ function fillEventForm(event) {
 }
 
 async function apiRequest(url, options = {}) {
-  const response = await fetch(url, options);
+  const method = String(options.method || "GET").toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && state.csrfToken && !url.startsWith("/api/public/")) {
+    headers.set("X-CSRF-Token", state.csrfToken);
+  }
+
+  const response = await fetch(url, { ...options, headers });
   const payload = await response.json();
   if (!response.ok) {
     throw new Error(payload.error || "Ошибка запроса.");
@@ -666,6 +644,7 @@ async function apiRequest(url, options = {}) {
 
 async function checkAdminSession() {
   const payload = await apiRequest("/api/admin/session");
+  state.csrfToken = payload.csrfToken || "";
   return Boolean(payload.authenticated);
 }
 
@@ -675,7 +654,7 @@ async function loginAdmin(event) {
   setLoginStatus("Проверяю доступ...", "");
 
   try {
-    await apiRequest("/api/admin/login", {
+    const payload = await apiRequest("/api/admin/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -683,6 +662,7 @@ async function loginAdmin(event) {
         password: adminPasswordInput.value,
       }),
     });
+    state.csrfToken = payload.csrfToken || "";
     adminPasswordInput.value = "";
     setAdminVisible(true);
     setLoginStatus("", "");
@@ -696,6 +676,7 @@ async function loginAdmin(event) {
 
 async function logoutAdmin() {
   await apiRequest("/api/admin/logout", { method: "POST" }).catch(() => null);
+  state.csrfToken = "";
   setAdminVisible(false);
   setStatus("", "");
   setLoginStatus("Вы вышли из админ-панели.", "success");
@@ -724,6 +705,7 @@ async function saveEmployee() {
     });
 
     applyEmployeesConfig(config);
+    openEmployeeModal(getActiveEmployee());
     setStatus("Сотрудник сохранён.", "success");
   } catch (error) {
     setStatus(error.message, "error");
@@ -983,6 +965,8 @@ checkButton.addEventListener("click", checkSlots);
 reloadCalendarsButton.addEventListener("click", loadCalendars);
 loadEventsButton.addEventListener("click", loadEvents);
 addEmployeeButton.addEventListener("click", startNewEmployee);
+closeEmployeeModalButton.addEventListener("click", closeEmployeeModal);
+employeeModalBackdrop.addEventListener("click", closeEmployeeModal);
 loadMeetingSlotsButton.addEventListener("click", loadSharedMeetingSlots);
 addExcludedDateButton.addEventListener("click", addExcludedDate);
 toggleEventFormButton.addEventListener("click", () => {
@@ -1021,6 +1005,7 @@ employeesListNode.addEventListener("click", async (event) => {
 
   if (button.dataset.action === "select-employee") {
     await activateEmployee(button.dataset.id);
+    openEmployeeModal(getActiveEmployee());
     return;
   }
 
@@ -1053,6 +1038,12 @@ togglePasswordButton.addEventListener("click", () => {
   togglePasswordButton.setAttribute("aria-label", shouldShowPassword ? "Скрыть пароль" : "Показать пароль");
 });
 
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeEmployeeModal();
+  }
+});
+
 function initializeAdmin() {
   renderEmbedCode();
   resetEventForm();
@@ -1066,6 +1057,9 @@ function initializeAdmin() {
     .then(() => {
       renderCalendars();
       renderEvents();
+      if (typeof window.refreshMtsLinkAdmin === "function") {
+        return window.refreshMtsLinkAdmin();
+      }
     })
     .catch(() => {
       setStatus("Не удалось загрузить сотрудников.", "error");
