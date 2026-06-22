@@ -29,7 +29,6 @@ const employeeModal = document.querySelector("#employee-modal");
 const closeEmployeeModalButton = document.querySelector("#close-employee-modal");
 const employeeModalBackdrop = document.querySelector("[data-close-employee-modal]");
 const toggleEventFormButton = document.querySelector("#toggle-event-form-button");
-const loadMeetingSlotsButton = document.querySelector("#load-meeting-slots-button");
 const meetingEmployeeASelect = document.querySelector("#meeting-employee-a");
 const meetingEmployeeBSelect = document.querySelector("#meeting-employee-b");
 const meetingRulesPreviewNode = document.querySelector("#meeting-rules-preview");
@@ -526,9 +525,13 @@ function renderSlots(result, rangeStart, rangeEnd) {
 }
 
 function renderSharedMeetingSlots(slots, employeeNames, rangeStart, rangeEnd) {
+  if (!meetingSlotsNode) {
+    return;
+  }
+
   if (!slots.length) {
     meetingSlotsNode.classList.add("empty");
-    meetingSlotsNode.innerHTML = "<p>Общих слотов на ближайшие 3 дня не найдено.</p>";
+    meetingSlotsNode.innerHTML = "<p>Общих слотов на ближайшие 3 недели не найдено.</p>";
     meetingSummaryNode.textContent = `Проверены сотрудники: ${employeeNames.join(" и ")}. Общих слотов нет.`;
     return;
   }
@@ -546,7 +549,7 @@ function renderSharedMeetingSlots(slots, employeeNames, rangeStart, rangeEnd) {
     buckets.get(dayKey).push(slot);
   }
 
-  meetingSummaryNode.textContent = `Проверены сотрудники: ${employeeNames.join(" и ")}. Длительность слота 1 час, шаг между стартами 1 час 30 минут, горизонт 3 дня, действуют ограничения по датам и времени.`;
+  meetingSummaryNode.textContent = `Проверены сотрудники: ${employeeNames.join(" и ")}. Длительность слота 1 час, шаг между стартами 1 час 30 минут, горизонт 3 недели, действуют ограничения по датам и времени.`;
   meetingSlotsNode.classList.remove("empty");
   meetingSlotsNode.innerHTML = [...buckets.entries()]
     .map(([dayKey, daySlots]) => {
@@ -833,7 +836,7 @@ async function loadSharedMeetingSlots() {
 
   const rangeStart = toLocalDayStart(new Date());
   const rangeEnd = new Date(rangeStart);
-  rangeEnd.setDate(rangeEnd.getDate() + 3);
+  rangeEnd.setDate(rangeEnd.getDate() + 21);
   loadMeetingSlotsButton.disabled = true;
   setStatus("Ищу общие слоты встречи...", "");
 
@@ -1003,7 +1006,6 @@ loadEventsButton.addEventListener("click", loadEvents);
 addEmployeeButton.addEventListener("click", startNewEmployee);
 closeEmployeeModalButton.addEventListener("click", closeEmployeeModal);
 employeeModalBackdrop.addEventListener("click", closeEmployeeModal);
-loadMeetingSlotsButton.addEventListener("click", loadSharedMeetingSlots);
 toggleEventFormButton.addEventListener("click", () => {
   setEventFormVisibility(!state.eventFormVisible);
 });

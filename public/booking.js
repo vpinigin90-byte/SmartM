@@ -627,9 +627,11 @@ async function submitBooking(event) {
     });
 
     resetSelection();
-    await loadSlots();
     setStatus("", "");
-    setBookingSuccessModal(true, "Встреча создана в календаре, участник добавлен по указанному e-mail.");
+    setBookingSuccessModal(true);
+    loadSlots().catch((error) => {
+      setStatus(error.message || "Не удалось обновить доступные слоты.", "error");
+    });
   } catch (error) {
     setStatus(error.message, "error");
   } finally {

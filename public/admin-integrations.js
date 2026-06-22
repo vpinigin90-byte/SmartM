@@ -24,7 +24,7 @@
     defaultDurationMinutes: 60,
     insertLinkIntoLocation: true,
     insertLinkIntoDescription: true,
-    appendMeetingMetaToDescription: true,
+    appendMeetingMetaToDescription: false,
     fallbackWithoutLink: true,
     failureWarningText: "MTS Link недоступен, бронь создана без ссылки.",
     requestTimeoutMs: 15000,
@@ -97,7 +97,9 @@
       defaultDurationMinutes: Number(fields.defaultDurationMinutes.value) || DEFAULT_SETTINGS.defaultDurationMinutes,
       insertLinkIntoLocation: fields.insertLinkIntoLocation.checked,
       insertLinkIntoDescription: fields.insertLinkIntoDescription.checked,
-      appendMeetingMetaToDescription: fields.appendMeetingMetaToDescription.checked,
+      appendMeetingMetaToDescription: fields.appendMeetingMetaToDescription
+        ? fields.appendMeetingMetaToDescription.checked
+        : false,
       fallbackWithoutLink: fields.fallbackWithoutLink.checked,
       failureWarningText: fields.failureWarningText.value.trim(),
       requestTimeoutMs: Number(fields.requestTimeoutMs.value) || DEFAULT_SETTINGS.requestTimeoutMs,

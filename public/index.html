@@ -251,8 +251,8 @@
           <section class="panel">
             <div class="results-head">
               <h2>Клиент выбирает время для встречи</h2>
-              <p id="meeting-summary" class="summary">
-                Показываются только слоты, в которых свободны оба выбранных сотрудника. Горизонт показа ограничен 3 днями.
+              <p id="meeting-summary" class="summary single-line-summary">
+                Показываются только слоты, в которых свободны оба выбранных сотрудника. Горизонт показа ограничен 3 неделями.
               </p>
             </div>
 
@@ -279,7 +279,7 @@
             <section class="inline-rules">
               <div class="results-head">
                 <h2>Правила доступности</h2>
-                <p class="summary">
+                <p class="summary single-line-summary">
                   Управляют датами и временем, которые доступны клиенту на странице бронирования.
                 </p>
               </div>
@@ -309,7 +309,7 @@
                   <label class="switch-field">
                     <input id="allow-same-day" type="checkbox" />
                     <span class="switch-control" aria-hidden="true"></span>
-                    <span>Разрешить запись на сегодня</span>
+                    <span class="switch-field-label">Разрешить запись на сегодня</span>
                   </label>
                 </div>
 
@@ -342,15 +342,6 @@
               <p>Правила доступности ещё не загружены.</p>
             </div>
 
-            <div class="actions">
-              <button id="load-meeting-slots-button" class="primary-button" type="button">
-                Открыть страницу со слотами
-              </button>
-            </div>
-
-            <div id="meeting-slots" class="slots empty">
-              <p>Слоты для клиента ещё не загружены.</p>
-            </div>
           </section>
         </section>
 
@@ -441,20 +432,16 @@
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Передача ссылки в календарь</h3>
-                    <p class="appearance-hint">Куда добавлять ссылку и служебные данные после создания встречи.</p>
+                    <p class="appearance-hint">Куда добавлять ссылку после создания встречи.</p>
                   </div>
                   <div class="integration-checks">
                     <label class="field compact-field checkbox-field">
-                      <span>Добавлять ссылку в LOCATION</span>
+                      <span>Добавлять ссылку в поле «Ссылка на звонок»</span>
                       <input id="mts-link-insert-location" type="checkbox" />
                     </label>
                     <label class="field compact-field checkbox-field">
                       <span>Добавлять ссылку в DESCRIPTION</span>
                       <input id="mts-link-insert-description" type="checkbox" />
-                    </label>
-                    <label class="field compact-field checkbox-field">
-                      <span>Добавлять ID и служебные метаданные</span>
-                      <input id="mts-link-append-meta" type="checkbox" />
                     </label>
                   </div>
                 </section>
@@ -527,9 +514,19 @@
                     <label class="field compact-field"><span>Вес заголовков</span><select id="appearance-title-font-weight"><option value="300">Light</option><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">ExtraBold</option><option value="900">Black</option></select></label>
                     <label class="field compact-field"><span>Вес основного текста</span><select id="appearance-body-font-weight"><option value="300">Light</option><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">ExtraBold</option><option value="900">Black</option></select></label>
                     <label class="field compact-field"><span>Фон страницы</span><input id="appearance-page-background" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field">
+                      <span>Фоновое изображение</span>
+                      <div class="appearance-upload-row">
+                        <input id="appearance-page-background-image-file" type="file" accept="image/*" />
+                        <button id="appearance-page-background-image-clear" class="ghost-button compact-ghost-button" type="button">Убрать</button>
+                      </div>
+                      <input id="appearance-page-background-image" type="hidden" />
+                      <small id="appearance-page-background-image-meta" class="appearance-upload-meta">Изображение не выбрано.</small>
+                    </label>
                     <label class="field compact-field"><span>Фон карточек</span><input id="appearance-card-background" class="appearance-color" type="color" /></label>
                     <label class="field compact-field"><span>Основной цвет текста</span><input id="appearance-text-color" class="appearance-color" type="color" /></label>
                     <label class="field compact-field"><span>Вторичный текст</span><input id="appearance-muted-text-color" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Ширина области на desktop, px</span><input id="appearance-desktop-content-width" type="number" min="720" max="1680" step="10" /></label>
                     <label class="field compact-field"><span>Размер заголовка, px</span><input id="appearance-hero-title-size" type="number" min="24" max="72" step="1" /></label>
                     <label class="field compact-field"><span>Размер базового текста, px</span><input id="appearance-body-text-size" type="number" min="11" max="20" step="1" /></label>
                     <label class="field compact-field"><span>Скругление карточек, px</span><input id="appearance-panel-radius" type="number" min="8" max="30" step="1" /></label>
@@ -612,6 +609,36 @@
                     <label class="field compact-field"><span>Высота кнопки, px</span><input id="appearance-primary-button-height" type="number" min="34" max="72" step="1" /></label>
                     <label class="field compact-field"><span>Фон иконок</span><input id="appearance-icon-button-background" class="appearance-color" type="color" /></label>
                     <label class="field compact-field"><span>Цвет иконок</span><input id="appearance-icon-button-text-color" class="appearance-color" type="color" /></label>
+                  </div>
+                </section>
+
+                <section class="appearance-group">
+                  <div class="appearance-group-head">
+                    <h3>Сообщение об успешном создании встречи</h3>
+                    <p class="appearance-hint">Оформление pop-up окна, которое открывается сразу после бронирования.</p>
+                  </div>
+                  <div class="appearance-grid">
+                    <label class="field compact-field">
+                      <span>Кастомная иконка</span>
+                      <div class="appearance-upload-row">
+                        <input id="appearance-success-modal-icon-file" type="file" accept="image/*" />
+                        <button id="appearance-success-modal-icon-clear" class="ghost-button compact-ghost-button" type="button">Убрать</button>
+                      </div>
+                      <input id="appearance-success-modal-icon" type="hidden" />
+                      <small id="appearance-success-modal-icon-meta" class="appearance-upload-meta">Иконка не выбрана.</small>
+                    </label>
+                    <label class="field compact-field"><span>Заголовок окна</span><input id="appearance-success-modal-title" type="text" maxlength="160" /></label>
+                    <label class="field compact-field"><span>Текст сообщения</span><textarea id="appearance-success-modal-message" rows="3" maxlength="1000"></textarea></label>
+                    <label class="field compact-field"><span>Текст кнопки</span><input id="appearance-success-modal-button-text" type="text" maxlength="80" /></label>
+                    <label class="field compact-field"><span>Фон окна</span><input id="appearance-success-modal-background" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Фон затемнения</span><input id="appearance-success-modal-backdrop" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Цвет заголовка</span><input id="appearance-success-modal-title-color" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Цвет текста</span><input id="appearance-success-modal-text-color" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Фон иконки</span><input id="appearance-success-modal-icon-background" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Цвет иконки</span><input id="appearance-success-modal-icon-color" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Фон кнопки</span><input id="appearance-success-modal-button-background" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Текст кнопки</span><input id="appearance-success-modal-button-text-color" class="appearance-color" type="color" /></label>
+                    <label class="field compact-field"><span>Граница кнопки</span><input id="appearance-success-modal-button-border-color" class="appearance-color" type="color" /></label>
                   </div>
                 </section>
               </div>

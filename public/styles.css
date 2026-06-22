@@ -28,7 +28,9 @@
   --booking-title-font-weight: 700;
   --booking-body-font-weight: 400;
   --booking-page-background: #f7f7f5;
+  --booking-page-background-image: none;
   --booking-card-background: #ffffff;
+  --booking-desktop-content-width: 1120;
   --booking-text-color: #18181b;
   --booking-muted-text-color: #71717a;
   --booking-hero-background: #ffffff;
@@ -36,6 +38,23 @@
   --booking-hero-lead-color: #71717a;
   --booking-title-size: 38;
   --booking-body-size: 13;
+  --booking-hero-title-font-family: var(--booking-font-family);
+  --booking-hero-title-font-weight: var(--booking-title-font-weight);
+  --booking-hero-lead-font-family: var(--booking-font-family);
+  --booking-hero-lead-font-weight: var(--booking-body-font-weight);
+  --booking-hero-lead-font-size: var(--booking-body-size);
+  --booking-picker-title-font-family: var(--booking-font-family);
+  --booking-picker-title-font-weight: var(--booking-title-font-weight);
+  --booking-picker-title-font-size: 20;
+  --booking-calendar-month-font-family: var(--booking-font-family);
+  --booking-calendar-month-font-weight: var(--booking-title-font-weight);
+  --booking-calendar-month-font-size: 16;
+  --booking-calendar-weekday-font-family: var(--booking-font-family);
+  --booking-calendar-weekday-font-weight: var(--booking-body-font-weight);
+  --booking-calendar-weekday-font-size: var(--booking-body-size);
+  --booking-calendar-date-font-family: var(--booking-font-family);
+  --booking-calendar-date-font-weight: var(--booking-body-font-weight);
+  --booking-calendar-date-font-size: 17;
   --booking-panel-radius: 14;
   --booking-date-text-color: #18181b;
   --booking-weekday-text-color: #9ca3af;
@@ -51,6 +70,12 @@
   --booking-time-active-text-color: #14532d;
   --booking-time-active-border-color: #14532d;
   --booking-time-button-height: 56;
+  --booking-time-slot-font-family: var(--booking-font-family);
+  --booking-time-slot-font-weight: var(--booking-body-font-weight);
+  --booking-time-slot-font-size: 16;
+  --booking-time-meta-font-family: var(--booking-font-family);
+  --booking-time-meta-font-weight: var(--booking-body-font-weight);
+  --booking-time-meta-font-size: 14;
   --booking-form-gradient-start: #0b314d;
   --booking-form-gradient-mid: #123f5f;
   --booking-form-gradient-end: #0a2840;
@@ -62,12 +87,48 @@
   --booking-form-placeholder-color: #bfd0e1;
   --booking-form-input-border-color: #a0c0db;
   --booking-form-input-height: 34;
+  --booking-form-title-font-family: var(--booking-font-family);
+  --booking-form-title-font-weight: var(--booking-title-font-weight);
+  --booking-form-title-font-size: 20;
+  --booking-form-meta-font-family: var(--booking-font-family);
+  --booking-form-meta-font-weight: var(--booking-body-font-weight);
+  --booking-form-meta-font-size: 10;
+  --booking-form-label-font-family: var(--booking-font-family);
+  --booking-form-label-font-weight: var(--booking-body-font-weight);
+  --booking-form-label-font-size: 10;
+  --booking-form-input-font-family: var(--booking-font-family);
+  --booking-form-input-font-weight: var(--booking-body-font-weight);
+  --booking-form-input-font-size: 11;
+  --booking-form-consent-font-family: var(--booking-font-family);
+  --booking-form-consent-font-weight: var(--booking-body-font-weight);
+  --booking-form-consent-font-size: 9;
   --booking-primary-button-background: #ffffff;
   --booking-primary-button-text-color: #0c1c2c;
   --booking-primary-button-border-color: #081d30;
   --booking-primary-button-height: 38;
+  --booking-primary-button-font-family: var(--booking-font-family);
+  --booking-primary-button-font-weight: 600;
+  --booking-primary-button-font-size: 13;
   --booking-icon-button-background: #6591b3;
   --booking-icon-button-text-color: #f2f8ff;
+  --booking-success-modal-background: #ffffff;
+  --booking-success-modal-backdrop: #07121e;
+  --booking-success-modal-title-color: #0f172a;
+  --booking-success-modal-text-color: #5b6472;
+  --booking-success-modal-icon-background: #dff6e7;
+  --booking-success-modal-icon-color: #166534;
+  --booking-success-modal-button-background: #ffffff;
+  --booking-success-modal-button-text-color: #0c1c2c;
+  --booking-success-modal-button-border-color: #081d30;
+  --booking-success-modal-title-font-family: var(--booking-font-family);
+  --booking-success-modal-title-font-weight: 700;
+  --booking-success-modal-title-font-size: 24;
+  --booking-success-modal-text-font-family: var(--booking-font-family);
+  --booking-success-modal-text-font-weight: 400;
+  --booking-success-modal-text-font-size: 15;
+  --booking-success-modal-button-font-family: var(--booking-font-family);
+  --booking-success-modal-button-font-weight: 600;
+  --booking-success-modal-button-font-size: 13;
 }
 
 * {
@@ -94,6 +155,7 @@ body {
   font-family: var(--booking-font-family);
   color: var(--booking-text-color);
   background:
+    var(--booking-page-background-image) center top / cover no-repeat,
     linear-gradient(180deg, color-mix(in srgb, var(--booking-page-background) 78%, white), rgba(247, 247, 245, 0) 360px),
     var(--background);
 }
@@ -117,7 +179,7 @@ select {
 
 .auth-card,
 .booking-shell {
-  width: min(1120px, 100%);
+  width: min(calc(var(--booking-desktop-content-width) * 1px), 100%);
   margin: 0 auto;
 }
 
@@ -180,15 +242,17 @@ body.booking-page.embedded-booking .booking-shell {
   line-height: 1.08;
   color: var(--booking-hero-title-color);
   white-space: nowrap;
-  font-weight: var(--booking-title-font-weight);
+  font-family: var(--booking-hero-title-font-family);
+  font-weight: var(--booking-hero-title-font-weight);
 }
 
 .booking-lead {
   margin: 0;
   color: var(--booking-hero-lead-color);
-  font-size: calc(var(--booking-body-size) * 1px);
+  font-family: var(--booking-hero-lead-font-family);
+  font-size: calc(var(--booking-hero-lead-font-size) * 1px);
   line-height: 1.45;
-  font-weight: var(--booking-body-font-weight);
+  font-weight: var(--booking-hero-lead-font-weight);
 }
 
 .booking-panel {
@@ -282,9 +346,10 @@ body.booking-page.embedded-booking .booking-shell {
 
 .calendar-month-label {
   margin: 0;
-  font-size: 16px;
+  font-family: var(--booking-calendar-month-font-family);
+  font-size: calc(var(--booking-calendar-month-font-size) * 1px);
   line-height: 1.2;
-  font-weight: var(--booking-title-font-weight);
+  font-weight: var(--booking-calendar-month-font-weight);
 }
 
 .calendar-nav {
@@ -330,8 +395,9 @@ body.booking-page.embedded-booking .booking-shell {
   justify-content: center;
   min-height: 28px;
   color: var(--booking-weekday-text-color);
-  font-size: calc(var(--booking-body-size) * 1px);
-  font-weight: var(--booking-body-font-weight);
+  font-family: var(--booking-calendar-weekday-font-family);
+  font-size: calc(var(--booking-calendar-weekday-font-size) * 1px);
+  font-weight: var(--booking-calendar-weekday-font-weight);
 }
 
 .calendar-grid.empty,
@@ -369,8 +435,9 @@ body.booking-page.embedded-booking .booking-shell {
 }
 
 .date-option strong {
-  font-size: 17px;
-  font-weight: var(--booking-body-font-weight);
+  font-family: var(--booking-calendar-date-font-family);
+  font-size: calc(var(--booking-calendar-date-font-size) * 1px);
+  font-weight: var(--booking-calendar-date-font-weight);
 }
 
 .date-option:hover:not(:disabled) {
@@ -895,7 +962,7 @@ body.modal-open {
 .booking-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(7, 18, 30, 0.62);
+  background: color-mix(in srgb, var(--booking-success-modal-backdrop) 62%, transparent);
   font-size: 10px;
   backdrop-filter: blur(6px);
 }
@@ -906,7 +973,7 @@ body.modal-open {
   width: min(520px, 100%);
   padding: 28px;
   border-radius: 24px;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  background: linear-gradient(180deg, var(--booking-success-modal-background), color-mix(in srgb, var(--booking-success-modal-background) 86%, #f8fafc));
   box-shadow: 0 30px 60px rgba(7, 18, 30, 0.32);
   text-align: center;
 }
@@ -931,29 +998,46 @@ body.modal-open {
   height: 64px;
   margin: 0 auto 16px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #dff6e7, #c9efd8);
-  color: #166534;
+  background: linear-gradient(180deg, var(--booking-success-modal-icon-background), color-mix(in srgb, var(--booking-success-modal-icon-background) 82%, #c9efd8));
+  color: var(--booking-success-modal-icon-color);
   font-size: 28px;
   font-weight: 700;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.booking-modal-icon.has-image {
+  color: transparent;
 }
 
 .booking-modal-dialog h2 {
   margin: 0 0 10px;
-  font-size: clamp(18px, 2.1vw, 24px);
+  font-family: var(--booking-success-modal-title-font-family);
+  font-size: clamp(18px, calc(var(--booking-success-modal-title-font-size) * 1px), 36px);
   line-height: 1.08;
-  font-weight: 600;
+  font-weight: var(--booking-success-modal-title-font-weight);
+  color: var(--booking-success-modal-title-color);
 }
 
 .booking-modal-dialog p {
   margin: 0;
-  color: #5b6472;
-  font-size: 15px;
+  color: var(--booking-success-modal-text-color);
+  font-family: var(--booking-success-modal-text-font-family);
+  font-size: clamp(12px, calc(var(--booking-success-modal-text-font-size) * 1px), 24px);
+  font-weight: var(--booking-success-modal-text-font-weight);
   line-height: 1.6;
 }
 
 .booking-modal-button {
   width: 100%;
   margin-top: 20px;
+  background: var(--booking-success-modal-button-background);
+  color: var(--booking-success-modal-button-text-color);
+  border-color: var(--booking-success-modal-button-border-color);
+  font-family: var(--booking-success-modal-button-font-family);
+  font-size: calc(var(--booking-success-modal-button-font-size) * 1px);
+  font-weight: var(--booking-success-modal-button-font-weight);
 }
 
 .results-head {
@@ -1013,6 +1097,9 @@ body.modal-open {
 }
 
 #booking-title {
+  font-family: var(--booking-picker-title-font-family);
+  font-size: calc(var(--booking-picker-title-font-size) * 1px);
+  font-weight: var(--booking-picker-title-font-weight);
   line-height: 28px;
 }
 
@@ -1022,6 +1109,11 @@ body.modal-open {
   color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.single-line-summary {
+  max-width: none;
+  white-space: nowrap;
 }
 
 .employees-list,
@@ -1124,7 +1216,7 @@ body.modal-open {
   align-items: center;
   gap: 10px;
   color: var(--foreground);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .switch-field input {
@@ -1157,11 +1249,15 @@ body.modal-open {
 }
 
 .switch-field input:checked + .switch-control {
-  background: var(--success-foreground);
+  background: #ceff15;
 }
 
 .switch-field input:checked + .switch-control::after {
   transform: translateX(20px);
+}
+
+.switch-field-label {
+  font-weight: 400;
 }
 
 .rule-chip {
@@ -1439,8 +1535,9 @@ body.modal-open {
 
 .selected-date-label {
   color: var(--booking-muted-text-color);
-  font-size: 14px;
-  font-weight: var(--booking-body-font-weight);
+  font-family: var(--booking-time-meta-font-family);
+  font-size: calc(var(--booking-time-meta-font-size) * 1px);
+  font-weight: var(--booking-time-meta-font-weight);
   line-height: 1.5;
 }
 
@@ -1475,8 +1572,9 @@ body.modal-open {
 }
 
 .time-option span {
-  font-size: calc(var(--booking-body-size) * 1px + 3px);
-  font-weight: var(--booking-body-font-weight);
+  font-family: var(--booking-time-slot-font-family);
+  font-size: calc(var(--booking-time-slot-font-size) * 1px);
+  font-weight: var(--booking-time-slot-font-weight);
   white-space: nowrap;
 }
 
@@ -1511,9 +1609,10 @@ body.modal-open {
 
 #booking-form-panel #client-form-title {
   color: var(--booking-form-title-color);
-  font-size: clamp(15px, 2vw, 20px);
+  font-family: var(--booking-form-title-font-family);
+  font-size: clamp(15px, 2vw, calc(var(--booking-form-title-font-size) * 1px));
   line-height: 1.05;
-  font-weight: var(--booking-title-font-weight);
+  font-weight: var(--booking-form-title-font-weight);
 }
 
 #booking-form-panel .summary,
@@ -1522,7 +1621,9 @@ body.modal-open {
 #booking-form-panel .field small,
 #booking-form-panel .booking-consent {
   color: var(--booking-form-muted-color);
-  font-size: 10px;
+  font-family: var(--booking-form-meta-font-family);
+  font-size: calc(var(--booking-form-meta-font-size) * 1px);
+  font-weight: var(--booking-form-meta-font-weight);
 }
 
 #booking-form-panel .selected-slot-row {
@@ -1537,8 +1638,9 @@ body.modal-open {
 #booking-form-panel .field span,
 #booking-form-panel .field-label {
   color: var(--booking-form-label-color);
-  font-size: 10px;
-  font-weight: var(--booking-body-font-weight);
+  font-family: var(--booking-form-label-font-family);
+  font-size: calc(var(--booking-form-label-font-size) * 1px);
+  font-weight: var(--booking-form-label-font-weight);
 }
 
 #booking-form-panel input,
@@ -1548,7 +1650,9 @@ body.modal-open {
   border: 1px solid var(--booking-form-input-border-color);
   border-radius: 12px;
   padding: 8px 12px;
-  font-size: 11px;
+  font-family: var(--booking-form-input-font-family);
+  font-size: calc(var(--booking-form-input-font-size) * 1px);
+  font-weight: var(--booking-form-input-font-weight);
   line-height: 1.2;
   background: var(--booking-form-input-background);
   color: var(--booking-form-input-text-color);
@@ -1622,8 +1726,9 @@ body.modal-open {
   border-radius: 12px;
   background: var(--booking-primary-button-background);
   color: var(--booking-primary-button-text-color);
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--booking-primary-button-font-family);
+  font-size: calc(var(--booking-primary-button-font-size) * 1px);
+  font-weight: var(--booking-primary-button-font-weight);
   box-shadow: 0 8px 18px rgba(3, 12, 22, 0.14);
 }
 
@@ -1635,7 +1740,9 @@ body.modal-open {
 #booking-form-panel .booking-consent {
   width: 100%;
   max-width: none;
-  font-size: 9px;
+  font-family: var(--booking-form-consent-font-family);
+  font-size: calc(var(--booking-form-consent-font-size) * 1px);
+  font-weight: var(--booking-form-consent-font-weight);
   line-height: 1.3;
 }
 
@@ -1799,6 +1906,77 @@ body.modal-open {
   gap: 12px;
 }
 
+.appearance-subsection {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, white);
+}
+
+#mts-link-form .appearance-group:first-child .appearance-grid:first-of-type {
+  grid-template-columns:
+    minmax(160px, 1.05fr)
+    minmax(150px, 0.95fr)
+    minmax(150px, 0.95fr)
+    minmax(220px, 1.35fr)
+    minmax(190px, 1.1fr);
+  align-items: start;
+  column-gap: 14px;
+  row-gap: 14px;
+}
+
+#mts-link-form .appearance-group:first-child .appearance-grid:last-of-type {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 4px;
+}
+
+#mts-link-form .appearance-group:first-child .appearance-group-head {
+  margin-bottom: 16px;
+}
+
+#mts-link-form .appearance-group:first-child .field {
+  gap: 6px;
+}
+
+#mts-link-form .appearance-group:first-child .field span {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+#mts-link-form .appearance-group:first-child .checkbox-field {
+  min-height: 48px;
+  gap: 12px;
+  padding: 11px 12px;
+}
+
+#mts-link-form .appearance-group:first-child .checkbox-field span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#mts-link-form .appearance-group:first-child input {
+  min-height: 48px;
+  padding: 10px 12px;
+}
+
+#mts-link-form .appearance-group:first-child .actions {
+  gap: 12px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+#mts-link-form .appearance-group:first-child .actions button {
+  min-height: 40px;
+}
+
+#mts-link-form .appearance-group:first-child .integration-reference {
+  padding: 16px 18px;
+}
+
+#mts-link-form .appearance-group:first-child .integration-reference p {
+  line-height: 1.45;
+}
+
 .appearance-color {
   width: 100%;
   min-height: 44px;
@@ -1810,6 +1988,29 @@ body.modal-open {
 
 .appearance-actions {
   justify-content: flex-start;
+}
+
+.appearance-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appearance-upload-row input[type="file"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.compact-ghost-button {
+  min-height: 36px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.appearance-upload-meta {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-foreground);
 }
 
 .checkbox-field {
@@ -1861,6 +2062,24 @@ body.modal-open {
   border-radius: 999px;
   background: rgba(24, 24, 27, 0.06);
   font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  #mts-link-form .appearance-group:first-child .appearance-grid:first-of-type {
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  #mts-link-form .appearance-group:first-child .appearance-grid:first-of-type,
+  #mts-link-form .appearance-group:first-child .appearance-grid:last-of-type {
+    grid-template-columns: 1fr;
+  }
+
+  #mts-link-form .appearance-group:first-child .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .appearance-preview p {

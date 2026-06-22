@@ -56,7 +56,7 @@ const DEFAULT_MTS_LINK_SETTINGS = {
   defaultDurationMinutes: 60,
   insertLinkIntoLocation: true,
   insertLinkIntoDescription: true,
-  appendMeetingMetaToDescription: true,
+  appendMeetingMetaToDescription: false,
   fallbackWithoutLink: true,
   failureWarningText: "MTS Link недоступен, бронь создана без ссылки.",
   requestTimeoutMs: 15000,
@@ -92,7 +92,9 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   titleFontWeight: 700,
   bodyFontWeight: 400,
   pageBackground: '#f7f7f5',
+  pageBackgroundImage: "",
   cardBackground: '#ffffff',
+  desktopContentWidth: 1120,
   textColor: '#18181b',
   mutedTextColor: '#71717a',
   heroBackground: '#ffffff',
@@ -100,6 +102,23 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   heroLeadColor: '#71717a',
   heroTitleSize: 38,
   bodyTextSize: 13,
+  heroTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  heroTitleFontWeight: 700,
+  heroLeadFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  heroLeadFontWeight: 400,
+  heroLeadFontSize: 13,
+  pickerTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  pickerTitleFontWeight: 700,
+  pickerTitleFontSize: 20,
+  calendarMonthFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  calendarMonthFontWeight: 700,
+  calendarMonthFontSize: 16,
+  calendarWeekdayFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  calendarWeekdayFontWeight: 400,
+  calendarWeekdayFontSize: 13,
+  calendarDateFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  calendarDateFontWeight: 400,
+  calendarDateFontSize: 17,
   panelRadius: 14,
   dateTextColor: '#18181b',
   weekdayTextColor: '#9ca3af',
@@ -115,6 +134,12 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   timeActiveTextColor: '#14532d',
   timeActiveBorderColor: '#14532d',
   timeButtonHeight: 56,
+  timeSlotFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  timeSlotFontWeight: 400,
+  timeSlotFontSize: 16,
+  timeMetaFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  timeMetaFontWeight: 400,
+  timeMetaFontSize: 14,
   formGradientStart: '#0b314d',
   formGradientMid: '#123f5f',
   formGradientEnd: '#0a2840',
@@ -126,12 +151,52 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   formPlaceholderColor: '#bfd0e1',
   formInputBorderColor: '#a0c0db',
   formInputHeight: 34,
+  formTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  formTitleFontWeight: 700,
+  formTitleFontSize: 20,
+  formMetaFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  formMetaFontWeight: 400,
+  formMetaFontSize: 10,
+  formLabelFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  formLabelFontWeight: 400,
+  formLabelFontSize: 10,
+  formInputFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  formInputFontWeight: 400,
+  formInputFontSize: 11,
+  formConsentFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  formConsentFontWeight: 400,
+  formConsentFontSize: 9,
   primaryButtonBackground: '#ffffff',
   primaryButtonTextColor: '#0c1c2c',
   primaryButtonBorderColor: '#081d30',
   primaryButtonHeight: 38,
+  primaryButtonFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  primaryButtonFontWeight: 600,
+  primaryButtonFontSize: 13,
   iconButtonBackground: '#6591b3',
   iconButtonTextColor: '#f2f8ff',
+  successModalIcon: "",
+  successModalTitle: "Встреча забронирована",
+  successModalMessage: "Встреча создана в календаре, участник добавлен по указанному e-mail.",
+  successModalButtonText: "Понятно",
+  successModalBackground: '#ffffff',
+  successModalBackdrop: '#07121e',
+  successModalTitleColor: '#0f172a',
+  successModalTextColor: '#5b6472',
+  successModalIconBackground: '#dff6e7',
+  successModalIconColor: '#166534',
+  successModalButtonBackground: '#ffffff',
+  successModalButtonTextColor: '#0c1c2c',
+  successModalButtonBorderColor: '#081d30',
+  successModalTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  successModalTitleFontWeight: 700,
+  successModalTitleFontSize: 24,
+  successModalTextFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  successModalTextFontWeight: 400,
+  successModalTextFontSize: 15,
+  successModalButtonFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  successModalButtonFontWeight: 600,
+  successModalButtonFontSize: 13,
 };
 
 function normalizeSizeValue(value, fallback, min, max) {
@@ -145,6 +210,23 @@ function normalizeSizeValue(value, fallback, min, max) {
 function normalizeColorValue(value, fallback) {
   const nextValue = String(value || '').trim();
   return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(nextValue) ? nextValue : fallback;
+}
+
+function normalizeAssetValue(value, fallback = "") {
+  const nextValue = String(value || "").trim();
+  if (!nextValue) {
+    return fallback;
+  }
+  if (nextValue.length > 600_000) {
+    return fallback;
+  }
+  if (/^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$/i.test(nextValue)) {
+    return nextValue.replace(/\s+/g, "");
+  }
+  if (/^https?:\/\/\S+$/i.test(nextValue)) {
+    return nextValue;
+  }
+  return fallback;
 }
 
 function normalizeBooleanValue(value, fallback = false) {
@@ -164,6 +246,15 @@ function normalizeBooleanValue(value, fallback = false) {
     }
   }
   return Boolean(value);
+}
+
+function normalizeFontFamilyValue(value, fallback) {
+  const nextValue = String(value || fallback).trim();
+  return ALLOWED_FONT_FAMILIES.has(nextValue) ? nextValue : fallback;
+}
+
+function normalizeFontWeightValue(value, fallback) {
+  return normalizeSizeValue(value, fallback, 300, 900);
 }
 
 function normalizeMeetingRules(source = {}) {
@@ -189,25 +280,28 @@ function normalizeMeetingRules(source = {}) {
 }
 
 function normalizeAppearance(source = {}) {
-  const fontFamily = String(source.fontFamily || DEFAULT_APPEARANCE_SETTINGS.fontFamily).trim();
   return {
-    fontFamily: ALLOWED_FONT_FAMILIES.has(fontFamily)
-      ? fontFamily
-      : DEFAULT_APPEARANCE_SETTINGS.fontFamily,
-    titleFontWeight: normalizeSizeValue(
+    fontFamily: normalizeFontFamilyValue(source.fontFamily, DEFAULT_APPEARANCE_SETTINGS.fontFamily),
+    titleFontWeight: normalizeFontWeightValue(
       source.titleFontWeight,
       DEFAULT_APPEARANCE_SETTINGS.titleFontWeight,
-      300,
-      900,
     ),
-    bodyFontWeight: normalizeSizeValue(
+    bodyFontWeight: normalizeFontWeightValue(
       source.bodyFontWeight,
       DEFAULT_APPEARANCE_SETTINGS.bodyFontWeight,
-      300,
-      900,
     ),
     pageBackground: normalizeColorValue(source.pageBackground, DEFAULT_APPEARANCE_SETTINGS.pageBackground),
+    pageBackgroundImage: normalizeAssetValue(
+      source.pageBackgroundImage,
+      DEFAULT_APPEARANCE_SETTINGS.pageBackgroundImage,
+    ),
     cardBackground: normalizeColorValue(source.cardBackground, DEFAULT_APPEARANCE_SETTINGS.cardBackground),
+    desktopContentWidth: normalizeSizeValue(
+      source.desktopContentWidth,
+      DEFAULT_APPEARANCE_SETTINGS.desktopContentWidth,
+      720,
+      1680,
+    ),
     textColor: normalizeColorValue(source.textColor, DEFAULT_APPEARANCE_SETTINGS.textColor),
     mutedTextColor: normalizeColorValue(source.mutedTextColor, DEFAULT_APPEARANCE_SETTINGS.mutedTextColor),
     heroBackground: normalizeColorValue(source.heroBackground, DEFAULT_APPEARANCE_SETTINGS.heroBackground),
@@ -215,6 +309,84 @@ function normalizeAppearance(source = {}) {
     heroLeadColor: normalizeColorValue(source.heroLeadColor, DEFAULT_APPEARANCE_SETTINGS.heroLeadColor),
     heroTitleSize: normalizeSizeValue(source.heroTitleSize, DEFAULT_APPEARANCE_SETTINGS.heroTitleSize, 24, 72),
     bodyTextSize: normalizeSizeValue(source.bodyTextSize, DEFAULT_APPEARANCE_SETTINGS.bodyTextSize, 11, 20),
+    heroTitleFontFamily: normalizeFontFamilyValue(
+      source.heroTitleFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.heroTitleFontFamily,
+    ),
+    heroTitleFontWeight: normalizeFontWeightValue(
+      source.heroTitleFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.heroTitleFontWeight,
+    ),
+    heroLeadFontFamily: normalizeFontFamilyValue(
+      source.heroLeadFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.heroLeadFontFamily,
+    ),
+    heroLeadFontWeight: normalizeFontWeightValue(
+      source.heroLeadFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.heroLeadFontWeight,
+    ),
+    heroLeadFontSize: normalizeSizeValue(
+      source.heroLeadFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.heroLeadFontSize,
+      10,
+      28,
+    ),
+    pickerTitleFontFamily: normalizeFontFamilyValue(
+      source.pickerTitleFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.pickerTitleFontFamily,
+    ),
+    pickerTitleFontWeight: normalizeFontWeightValue(
+      source.pickerTitleFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.pickerTitleFontWeight,
+    ),
+    pickerTitleFontSize: normalizeSizeValue(
+      source.pickerTitleFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.pickerTitleFontSize,
+      12,
+      36,
+    ),
+    calendarMonthFontFamily: normalizeFontFamilyValue(
+      source.calendarMonthFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.calendarMonthFontFamily,
+    ),
+    calendarMonthFontWeight: normalizeFontWeightValue(
+      source.calendarMonthFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.calendarMonthFontWeight,
+    ),
+    calendarMonthFontSize: normalizeSizeValue(
+      source.calendarMonthFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.calendarMonthFontSize,
+      10,
+      28,
+    ),
+    calendarWeekdayFontFamily: normalizeFontFamilyValue(
+      source.calendarWeekdayFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.calendarWeekdayFontFamily,
+    ),
+    calendarWeekdayFontWeight: normalizeFontWeightValue(
+      source.calendarWeekdayFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.calendarWeekdayFontWeight,
+    ),
+    calendarWeekdayFontSize: normalizeSizeValue(
+      source.calendarWeekdayFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.calendarWeekdayFontSize,
+      9,
+      24,
+    ),
+    calendarDateFontFamily: normalizeFontFamilyValue(
+      source.calendarDateFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.calendarDateFontFamily,
+    ),
+    calendarDateFontWeight: normalizeFontWeightValue(
+      source.calendarDateFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.calendarDateFontWeight,
+    ),
+    calendarDateFontSize: normalizeSizeValue(
+      source.calendarDateFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.calendarDateFontSize,
+      10,
+      30,
+    ),
     panelRadius: normalizeSizeValue(source.panelRadius, DEFAULT_APPEARANCE_SETTINGS.panelRadius, 8, 30),
     dateTextColor: normalizeColorValue(source.dateTextColor, DEFAULT_APPEARANCE_SETTINGS.dateTextColor),
     weekdayTextColor: normalizeColorValue(source.weekdayTextColor, DEFAULT_APPEARANCE_SETTINGS.weekdayTextColor),
@@ -230,6 +402,34 @@ function normalizeAppearance(source = {}) {
     timeActiveTextColor: normalizeColorValue(source.timeActiveTextColor, DEFAULT_APPEARANCE_SETTINGS.timeActiveTextColor),
     timeActiveBorderColor: normalizeColorValue(source.timeActiveBorderColor, DEFAULT_APPEARANCE_SETTINGS.timeActiveBorderColor),
     timeButtonHeight: normalizeSizeValue(source.timeButtonHeight, DEFAULT_APPEARANCE_SETTINGS.timeButtonHeight, 40, 92),
+    timeSlotFontFamily: normalizeFontFamilyValue(
+      source.timeSlotFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.timeSlotFontFamily,
+    ),
+    timeSlotFontWeight: normalizeFontWeightValue(
+      source.timeSlotFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.timeSlotFontWeight,
+    ),
+    timeSlotFontSize: normalizeSizeValue(
+      source.timeSlotFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.timeSlotFontSize,
+      10,
+      28,
+    ),
+    timeMetaFontFamily: normalizeFontFamilyValue(
+      source.timeMetaFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.timeMetaFontFamily,
+    ),
+    timeMetaFontWeight: normalizeFontWeightValue(
+      source.timeMetaFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.timeMetaFontWeight,
+    ),
+    timeMetaFontSize: normalizeSizeValue(
+      source.timeMetaFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.timeMetaFontSize,
+      9,
+      24,
+    ),
     formGradientStart: normalizeColorValue(source.formGradientStart, DEFAULT_APPEARANCE_SETTINGS.formGradientStart),
     formGradientMid: normalizeColorValue(source.formGradientMid, DEFAULT_APPEARANCE_SETTINGS.formGradientMid),
     formGradientEnd: normalizeColorValue(source.formGradientEnd, DEFAULT_APPEARANCE_SETTINGS.formGradientEnd),
@@ -241,12 +441,187 @@ function normalizeAppearance(source = {}) {
     formPlaceholderColor: normalizeColorValue(source.formPlaceholderColor, DEFAULT_APPEARANCE_SETTINGS.formPlaceholderColor),
     formInputBorderColor: normalizeColorValue(source.formInputBorderColor, DEFAULT_APPEARANCE_SETTINGS.formInputBorderColor),
     formInputHeight: normalizeSizeValue(source.formInputHeight, DEFAULT_APPEARANCE_SETTINGS.formInputHeight, 30, 72),
+    formTitleFontFamily: normalizeFontFamilyValue(
+      source.formTitleFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.formTitleFontFamily,
+    ),
+    formTitleFontWeight: normalizeFontWeightValue(
+      source.formTitleFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.formTitleFontWeight,
+    ),
+    formTitleFontSize: normalizeSizeValue(
+      source.formTitleFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.formTitleFontSize,
+      12,
+      36,
+    ),
+    formMetaFontFamily: normalizeFontFamilyValue(
+      source.formMetaFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.formMetaFontFamily,
+    ),
+    formMetaFontWeight: normalizeFontWeightValue(
+      source.formMetaFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.formMetaFontWeight,
+    ),
+    formMetaFontSize: normalizeSizeValue(
+      source.formMetaFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.formMetaFontSize,
+      8,
+      20,
+    ),
+    formLabelFontFamily: normalizeFontFamilyValue(
+      source.formLabelFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.formLabelFontFamily,
+    ),
+    formLabelFontWeight: normalizeFontWeightValue(
+      source.formLabelFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.formLabelFontWeight,
+    ),
+    formLabelFontSize: normalizeSizeValue(
+      source.formLabelFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.formLabelFontSize,
+      8,
+      22,
+    ),
+    formInputFontFamily: normalizeFontFamilyValue(
+      source.formInputFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.formInputFontFamily,
+    ),
+    formInputFontWeight: normalizeFontWeightValue(
+      source.formInputFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.formInputFontWeight,
+    ),
+    formInputFontSize: normalizeSizeValue(
+      source.formInputFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.formInputFontSize,
+      9,
+      24,
+    ),
+    formConsentFontFamily: normalizeFontFamilyValue(
+      source.formConsentFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.formConsentFontFamily,
+    ),
+    formConsentFontWeight: normalizeFontWeightValue(
+      source.formConsentFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.formConsentFontWeight,
+    ),
+    formConsentFontSize: normalizeSizeValue(
+      source.formConsentFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.formConsentFontSize,
+      8,
+      18,
+    ),
     primaryButtonBackground: normalizeColorValue(source.primaryButtonBackground, DEFAULT_APPEARANCE_SETTINGS.primaryButtonBackground),
     primaryButtonTextColor: normalizeColorValue(source.primaryButtonTextColor, DEFAULT_APPEARANCE_SETTINGS.primaryButtonTextColor),
     primaryButtonBorderColor: normalizeColorValue(source.primaryButtonBorderColor, DEFAULT_APPEARANCE_SETTINGS.primaryButtonBorderColor),
     primaryButtonHeight: normalizeSizeValue(source.primaryButtonHeight, DEFAULT_APPEARANCE_SETTINGS.primaryButtonHeight, 34, 72),
+    primaryButtonFontFamily: normalizeFontFamilyValue(
+      source.primaryButtonFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.primaryButtonFontFamily,
+    ),
+    primaryButtonFontWeight: normalizeFontWeightValue(
+      source.primaryButtonFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.primaryButtonFontWeight,
+    ),
+    primaryButtonFontSize: normalizeSizeValue(
+      source.primaryButtonFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.primaryButtonFontSize,
+      10,
+      24,
+    ),
     iconButtonBackground: normalizeColorValue(source.iconButtonBackground, DEFAULT_APPEARANCE_SETTINGS.iconButtonBackground),
     iconButtonTextColor: normalizeColorValue(source.iconButtonTextColor, DEFAULT_APPEARANCE_SETTINGS.iconButtonTextColor),
+    successModalIcon: normalizeAssetValue(
+      source.successModalIcon,
+      DEFAULT_APPEARANCE_SETTINGS.successModalIcon,
+    ),
+    successModalTitle: String(
+      source.successModalTitle || DEFAULT_APPEARANCE_SETTINGS.successModalTitle,
+    ).trim().slice(0, 160) || DEFAULT_APPEARANCE_SETTINGS.successModalTitle,
+    successModalMessage: String(
+      source.successModalMessage || DEFAULT_APPEARANCE_SETTINGS.successModalMessage,
+    ).trim().slice(0, 1000) || DEFAULT_APPEARANCE_SETTINGS.successModalMessage,
+    successModalButtonText: String(
+      source.successModalButtonText || DEFAULT_APPEARANCE_SETTINGS.successModalButtonText,
+    ).trim().slice(0, 80) || DEFAULT_APPEARANCE_SETTINGS.successModalButtonText,
+    successModalBackground: normalizeColorValue(
+      source.successModalBackground,
+      DEFAULT_APPEARANCE_SETTINGS.successModalBackground,
+    ),
+    successModalBackdrop: normalizeColorValue(
+      source.successModalBackdrop,
+      DEFAULT_APPEARANCE_SETTINGS.successModalBackdrop,
+    ),
+    successModalTitleColor: normalizeColorValue(
+      source.successModalTitleColor,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTitleColor,
+    ),
+    successModalTextColor: normalizeColorValue(
+      source.successModalTextColor,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTextColor,
+    ),
+    successModalIconBackground: normalizeColorValue(
+      source.successModalIconBackground,
+      DEFAULT_APPEARANCE_SETTINGS.successModalIconBackground,
+    ),
+    successModalIconColor: normalizeColorValue(
+      source.successModalIconColor,
+      DEFAULT_APPEARANCE_SETTINGS.successModalIconColor,
+    ),
+    successModalButtonBackground: normalizeColorValue(
+      source.successModalButtonBackground,
+      DEFAULT_APPEARANCE_SETTINGS.successModalButtonBackground,
+    ),
+    successModalButtonTextColor: normalizeColorValue(
+      source.successModalButtonTextColor,
+      DEFAULT_APPEARANCE_SETTINGS.successModalButtonTextColor,
+    ),
+    successModalButtonBorderColor: normalizeColorValue(
+      source.successModalButtonBorderColor,
+      DEFAULT_APPEARANCE_SETTINGS.successModalButtonBorderColor,
+    ),
+    successModalTitleFontFamily: normalizeFontFamilyValue(
+      source.successModalTitleFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTitleFontFamily,
+    ),
+    successModalTitleFontWeight: normalizeFontWeightValue(
+      source.successModalTitleFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTitleFontWeight,
+    ),
+    successModalTitleFontSize: normalizeSizeValue(
+      source.successModalTitleFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTitleFontSize,
+      14,
+      36,
+    ),
+    successModalTextFontFamily: normalizeFontFamilyValue(
+      source.successModalTextFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTextFontFamily,
+    ),
+    successModalTextFontWeight: normalizeFontWeightValue(
+      source.successModalTextFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTextFontWeight,
+    ),
+    successModalTextFontSize: normalizeSizeValue(
+      source.successModalTextFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.successModalTextFontSize,
+      10,
+      24,
+    ),
+    successModalButtonFontFamily: normalizeFontFamilyValue(
+      source.successModalButtonFontFamily,
+      DEFAULT_APPEARANCE_SETTINGS.successModalButtonFontFamily,
+    ),
+    successModalButtonFontWeight: normalizeFontWeightValue(
+      source.successModalButtonFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.successModalButtonFontWeight,
+    ),
+    successModalButtonFontSize: normalizeSizeValue(
+      source.successModalButtonFontSize,
+      DEFAULT_APPEARANCE_SETTINGS.successModalButtonFontSize,
+      10,
+      24,
+    ),
   };
 }
 
@@ -2602,8 +2977,17 @@ async function createPublicBooking(booking) {
     booking.comment ? `Комментарий: ${booking.comment}` : "",
   ];
 
-  if (mtsLinkMeeting?.meetingUrl) {
+  if (mtsLinkMeeting?.meetingUrl && mtsLinkSettings.insertLinkIntoDescription) {
     descriptionSections.push(`Ссылка на встречу: ${mtsLinkMeeting.meetingUrl}`);
+  }
+
+  if (mtsLinkMeeting?.meetingUrl && mtsLinkSettings.appendMeetingMetaToDescription) {
+    descriptionSections.push("Создано через MTS Link");
+    descriptionSections.push(`Event ID: ${mtsLinkMeeting.eventId}`);
+    descriptionSections.push(`EventSession ID: ${mtsLinkMeeting.eventSessionId}`);
+    if (mtsLinkMeeting.registrantId) {
+      descriptionSections.push(`Registrant ID: ${mtsLinkMeeting.registrantId}`);
+    }
   }
 
   const uid = crypto.randomUUID();
@@ -2614,7 +2998,7 @@ async function createPublicBooking(booking) {
     summary: `Демо Scrolltool для ${booking.companyName}`,
     description,
     location: "Онлайн",
-    conferenceUrl: mtsLinkMeeting?.meetingUrl || "",
+    conferenceUrl: mtsLinkSettings.insertLinkIntoLocation ? mtsLinkMeeting?.meetingUrl || "" : "",
     start: booking.start,
     end: booking.end,
     attendees: [
