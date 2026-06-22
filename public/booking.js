@@ -231,13 +231,12 @@ function addMonths(date, amount) {
 }
 
 function getAvailableMonthBounds() {
-  const dayKeys = [...state.slotsByDay.keys()].sort();
-  if (!dayKeys.length) {
-    return null;
-  }
+  const { start, end } = getSlotsRange();
+  const lastDay = new Date(end);
+  lastDay.setDate(lastDay.getDate() - 1);
   return {
-    min: startOfMonth(new Date(dayKeys[0])),
-    max: startOfMonth(new Date(dayKeys[dayKeys.length - 1])),
+    min: startOfMonth(start),
+    max: startOfMonth(lastDay),
   };
 }
 
@@ -430,9 +429,6 @@ async function loadSlots() {
     const params = new URLSearchParams({
       rangeStartIso: start.toISOString(),
       rangeEndIso: end.toISOString(),
-      allowedStartTime: "09:00",
-      allowedEndTime: "18:00",
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
     const payload = await apiRequest(`/api/public/slots?${params.toString()}`);
     state.slots = payload.slots || [];
