@@ -361,7 +361,7 @@
               <div>
                 <h2>Интеграция с MTS Link</h2>
                 <p class="summary">
-                  Автоматическое создание онлайн-встречи и передача ссылки в календарное приглашение.
+                  Автоматическое создание запланированной встречи типа meeting и передача персональной ссылки в календарное приглашение.
                 </p>
               </div>
             </div>
@@ -371,7 +371,7 @@
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Подключение</h3>
-                    <p class="appearance-hint">Общий интеграционный аккаунт и проверка доступа к API MTS Link.</p>
+                    <p class="appearance-hint">Общий интеграционный аккаунт и проверка доступа к API MTS Link для сценария запланированной встречи.</p>
                   </div>
                   <div class="appearance-grid">
                     <label class="field compact-field checkbox-field">
@@ -381,6 +381,10 @@
                     <label class="field compact-field">
                       <span>Режим аккаунта</span>
                       <input id="mts-link-account-mode" type="text" value="shared" readonly />
+                    </label>
+                    <label class="field compact-field">
+                      <span>Тип встречи</span>
+                      <input id="mts-link-meeting-type" type="text" value="meeting" readonly />
                     </label>
                     <label class="field compact-field">
                       <span>Базовый URL API</span>
@@ -393,17 +397,22 @@
                   </div>
                   <div class="actions">
                     <button id="save-mts-link-button" class="primary-button" type="submit">Сохранить настройки MTS Link</button>
-                    <button id="test-mts-link-button" class="secondary-button" type="button">Проверить подключение</button>
+                    <button id="test-mts-link-button" class="secondary-button" type="button">Проверить API и создание встречи</button>
                   </div>
-                  <div id="mts-link-test-status" class="rules-preview integration-reference">
-                    <p>Проверка подключения ещё не запускалась.</p>
+                  <div class="appearance-grid">
+                    <div id="mts-link-connection-status" class="rules-preview integration-reference">
+                      <p>Проверка доступа к API ещё не запускалась.</p>
+                    </div>
+                    <div id="mts-link-create-status" class="rules-preview integration-reference">
+                      <p>Проверка создания встречи ещё не запускалась.</p>
+                    </div>
                   </div>
                 </section>
 
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Создание встречи</h3>
-                    <p class="appearance-hint">Шаблоны названия и описания, которые уйдут в MTS Link при бронировании.</p>
+                    <p class="appearance-hint">Шаблоны названия и описания, которые применяются к создаваемой запланированной встрече.</p>
                   </div>
                   <div class="appearance-grid">
                     <label class="field compact-field">
@@ -484,7 +493,7 @@
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Последняя успешно созданная встреча</h3>
-                    <p class="appearance-hint">Read-only сведения о последнем успешном ответе API.</p>
+                    <p class="appearance-hint">Read-only сведения о последней встрече, для которой удалось получить итоговую ссылку участника.</p>
                   </div>
                   <div id="mts-link-last-success" class="rules-preview integration-reference">
                     <p>Пока успешных встреч через MTS Link не было.</p>

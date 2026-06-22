@@ -47,6 +47,7 @@ const DEFAULT_MTS_LINK_SETTINGS = {
   accountMode: "shared",
   baseUrl: "https://userapi.mts-link.ru/v3",
   accessToken: "",
+  meetingType: "meeting",
   organizerName: "Команда Scrolltool",
   defaultRoomTitleTemplate: "Демо Scrolltool для {{companyName}}",
   defaultRoomDescriptionTemplate:
@@ -59,9 +60,12 @@ const DEFAULT_MTS_LINK_SETTINGS = {
   fallbackWithoutLink: true,
   failureWarningText: "MTS Link недоступен, бронь создана без ссылки.",
   requestTimeoutMs: 15000,
-  lastTestAt: null,
-  lastTestStatus: null,
-  lastTestMessage: "",
+  lastConnectionTestAt: null,
+  lastConnectionTestStatus: null,
+  lastConnectionTestMessage: "",
+  lastCreateTestAt: null,
+  lastCreateTestStatus: null,
+  lastCreateTestMessage: "",
   lastSuccessMeeting: null,
 };
 const MTS_LINK_TEMPLATE_VARIABLES = new Set([
@@ -255,15 +259,27 @@ function normalizeMtsLinkSettings(source = {}) {
             source.lastSuccessMeeting.eventId === undefined || source.lastSuccessMeeting.eventId === null
               ? null
               : String(source.lastSuccessMeeting.eventId),
+          eventSessionId:
+            source.lastSuccessMeeting.eventSessionId === undefined || source.lastSuccessMeeting.eventSessionId === null
+              ? null
+              : String(source.lastSuccessMeeting.eventSessionId),
           meetingId:
             source.lastSuccessMeeting.meetingId === undefined || source.lastSuccessMeeting.meetingId === null
               ? null
               : String(source.lastSuccessMeeting.meetingId),
+          registrantId:
+            source.lastSuccessMeeting.registrantId === undefined || source.lastSuccessMeeting.registrantId === null
+              ? null
+              : String(source.lastSuccessMeeting.registrantId),
           meetingUrl: String(source.lastSuccessMeeting.meetingUrl || "").trim() || null,
           rawStatus:
             source.lastSuccessMeeting.rawStatus === undefined || source.lastSuccessMeeting.rawStatus === null
               ? null
               : Number(source.lastSuccessMeeting.rawStatus) || null,
+          registerStatus:
+            source.lastSuccessMeeting.registerStatus === undefined || source.lastSuccessMeeting.registerStatus === null
+              ? null
+              : Number(source.lastSuccessMeeting.registerStatus) || null,
         }
       : null;
 
@@ -272,6 +288,7 @@ function normalizeMtsLinkSettings(source = {}) {
     accountMode: "shared",
     baseUrl: String(source.baseUrl || DEFAULT_MTS_LINK_SETTINGS.baseUrl).trim().replace(/\/+$/, ""),
     accessToken: String(source.accessToken || "").trim(),
+    meetingType: "meeting",
     organizerName: String(source.organizerName || DEFAULT_MTS_LINK_SETTINGS.organizerName).trim(),
     defaultRoomTitleTemplate: String(
       source.defaultRoomTitleTemplate || DEFAULT_MTS_LINK_SETTINGS.defaultRoomTitleTemplate,
@@ -311,10 +328,22 @@ function normalizeMtsLinkSettings(source = {}) {
       1000,
       60000,
     ),
-    lastTestAt: String(source.lastTestAt || "").trim() || null,
-    lastTestStatus:
-      source.lastTestStatus === "success" || source.lastTestStatus === "error" ? source.lastTestStatus : null,
-    lastTestMessage: String(source.lastTestMessage || "").trim(),
+    lastConnectionTestAt:
+      String(source.lastConnectionTestAt || source.lastTestAt || "").trim() || null,
+    lastConnectionTestStatus:
+      source.lastConnectionTestStatus === "success" || source.lastConnectionTestStatus === "error"
+        ? source.lastConnectionTestStatus
+        : source.lastTestStatus === "success" || source.lastTestStatus === "error"
+          ? source.lastTestStatus
+          : null,
+    lastConnectionTestMessage:
+      String(source.lastConnectionTestMessage || source.lastTestMessage || "").trim(),
+    lastCreateTestAt: String(source.lastCreateTestAt || "").trim() || null,
+    lastCreateTestStatus:
+      source.lastCreateTestStatus === "success" || source.lastCreateTestStatus === "error"
+        ? source.lastCreateTestStatus
+        : null,
+    lastCreateTestMessage: String(source.lastCreateTestMessage || "").trim(),
     lastSuccessMeeting,
   };
 }
@@ -1551,6 +1580,88 @@ function getMtsLinkTemplateContext(booking, employee, settings) {
   };
 }
 
+function splitClientName(clientName) {
+  const parts = String(clientName || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    secondName: parts.slice(1).join(" "),
+  };
+}
+
+function normalizeMtsLinkPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return {};
+  }
+  if (payload.data && typeof payload.data === "object") {
+    return payload.data;
+  }
+  return payload;
+}
+
+function getFirstDefinedString(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    const normalized = String(value).trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+function getFirstDefinedNumber(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+    const normalized = Number(value);
+    if (!Number.isNaN(normalized)) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+function buildMtsLinkEventPayload(booking, employee, settings) {
+  const templateContext = getMtsLinkTemplateContext(booking, employee, settings);
+  return {
+    type: settings.meetingType || "meeting",
+    name: renderMtsLinkTemplate(settings.defaultRoomTitleTemplate, templateContext),
+    description: renderMtsLinkTemplate(settings.defaultRoomDescriptionTemplate, templateContext),
+    startsAtTimestamp: booking.start,
+    startType: "autostart",
+    lang: "RU",
+    "accessSettings[isPasswordRequired]": "0",
+    "accessSettings[isModerationRequired]": "0",
+    "accessSettings[isRegistrationRequired]": "1",
+  };
+}
+
+function buildMtsLinkSessionPayload(booking, settings) {
+  return {
+    startsAtTimestamp: booking.start,
+    startType: "autostart",
+    lang: "RU",
+  };
+}
+
+function buildMtsLinkRegistrantPayload(booking) {
+  const { firstName, secondName } = splitClientName(booking.clientName);
+  return {
+    name: firstName || booking.clientName,
+    secondName,
+    email: booking.clientEmail,
+    role: "GUEST",
+    isAutoEnter: "true",
+    sendEmail: "false",
+  };
+}
+
 function buildMtsLinkFormPayload(data) {
   const params = new URLSearchParams();
   Object.entries(data).forEach(([key, value]) => {
@@ -1566,6 +1677,11 @@ function createMtsLinkError(message, responseText = "", statusCode = 502) {
   const error = new Error(message);
   error.statusCode = statusCode;
   error.responseText = responseText;
+  return error;
+}
+
+function withMtsLinkStep(error, step) {
+  error.mtsLinkStep = step;
   return error;
 }
 
@@ -1621,55 +1737,122 @@ async function mtsLinkRequest(settings, endpointPath, options = {}) {
 
 async function testMtsLinkConnection(settings) {
   validateMtsLinkSettings(settings);
-  const result = await mtsLinkRequest(settings, "/organization/events/schedule", { method: "GET" });
+  let accessResult;
+  try {
+    accessResult = await mtsLinkRequest(settings, "/organization/events/schedule", { method: "GET" });
+  } catch (error) {
+    throw withMtsLinkStep(error, "connection");
+  }
+  const smokeStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  smokeStart.setUTCMinutes(0, 0, 0);
+  const smokeEnd = new Date(smokeStart.getTime() + settings.defaultDurationMinutes * 60 * 1000);
+  const smokeBooking = {
+    clientName: "Тестовый Клиент",
+    clientEmail: "test-mts-link@scroll-tool.ru",
+    clientPhone: "+79990000000",
+    companyName: "Scrolltool",
+    position: "Тест интеграции",
+    start: smokeStart.toISOString(),
+    end: smokeEnd.toISOString(),
+    comment: "",
+    additionalAttendees: [],
+    rules: { timeZone: settings.timeZone || "Europe/Moscow" },
+  };
+  let smokeMeeting;
+  try {
+    smokeMeeting = await createMtsLinkMeeting(smokeBooking, { name: settings.organizerName || "Scrolltool" }, settings);
+  } catch (error) {
+    throw withMtsLinkStep(error, error.mtsLinkStep || "create");
+  }
   return {
     ok: true,
-    status: result.status,
-    message: "Подключение к MTS Link успешно.",
+    accessStatus: accessResult.status,
+    createStatus: smokeMeeting.registerStatus || smokeMeeting.rawStatus,
+    message: "Подключение к MTS Link и создание тестовой встречи успешны.",
+    lastSuccessMeeting: {
+      createdAt: new Date().toISOString(),
+      eventId: smokeMeeting.eventId,
+      eventSessionId: smokeMeeting.eventSessionId,
+      meetingId: smokeMeeting.meetingId,
+      registrantId: smokeMeeting.registrantId,
+      meetingUrl: smokeMeeting.meetingUrl,
+      rawStatus: smokeMeeting.rawStatus,
+      registerStatus: smokeMeeting.registerStatus,
+    },
   };
 }
 
 async function createMtsLinkMeeting(booking, employee, settings) {
   validateMtsLinkSettings(settings);
-  const templateContext = getMtsLinkTemplateContext(booking, employee, settings);
-  const name = renderMtsLinkTemplate(settings.defaultRoomTitleTemplate, templateContext);
-  const description = renderMtsLinkTemplate(settings.defaultRoomDescriptionTemplate, templateContext);
+  let eventResponse;
+  try {
+    eventResponse = await mtsLinkRequest(settings, "/events", {
+      method: "POST",
+      form: buildMtsLinkEventPayload(booking, employee, settings),
+    });
+  } catch (error) {
+    throw withMtsLinkStep(error, "event");
+  }
 
-  const eventResponse = await mtsLinkRequest(settings, "/events", {
-    method: "POST",
-    form: {
-      name,
-      description,
-      startsAtTimestamp: booking.start,
-      endsAtTimestamp: booking.end,
-      "accessSettings[isPasswordRequired]": "0",
-      "accessSettings[isModerationRequired]": "0",
-      "accessSettings[isRegistrationRequired]": "0",
-    },
-  });
-
-  const eventId = eventResponse.payload?.eventId || eventResponse.payload?.id || null;
+  const eventPayload = normalizeMtsLinkPayload(eventResponse.payload);
+  const eventId = getFirstDefinedString(eventPayload.eventId, eventPayload.id);
   if (!eventId) {
     throw createMtsLinkError("MTS Link не вернул eventId.", eventResponse.responseText, 502);
   }
 
-  const sessionResponse = await mtsLinkRequest(settings, `/events/${eventId}/sessions`, {
-    method: "POST",
-    form: {},
-  });
+  let sessionResponse;
+  try {
+    sessionResponse = await mtsLinkRequest(settings, `/events/${eventId}/sessions`, {
+      method: "POST",
+      form: buildMtsLinkSessionPayload(booking, settings),
+    });
+  } catch (error) {
+    throw withMtsLinkStep(error, "session");
+  }
+  const sessionPayload = normalizeMtsLinkPayload(sessionResponse.payload);
+  const eventSessionId = getFirstDefinedString(
+    sessionPayload.eventSessionId,
+    sessionPayload.id,
+    sessionPayload.sessionId,
+  );
+  if (!eventSessionId) {
+    throw createMtsLinkError("MTS Link не вернул eventSessionId.", sessionResponse.responseText, 502);
+  }
+
+  let registerResponse;
+  try {
+    registerResponse = await mtsLinkRequest(settings, `/eventsessions/${eventSessionId}/register`, {
+      method: "POST",
+      form: buildMtsLinkRegistrantPayload(booking),
+    });
+  } catch (error) {
+    throw withMtsLinkStep(error, "register");
+  }
+  const registerPayload = normalizeMtsLinkPayload(registerResponse.payload);
+  const meetingUrl = getFirstDefinedString(
+    registerPayload.link,
+    registerPayload.url,
+    registerPayload.joinLink,
+    registerPayload.guestLink,
+    registerPayload.personalLink,
+  );
+  if (!meetingUrl) {
+    throw createMtsLinkError("MTS Link не вернул персональную ссылку участника.", registerResponse.responseText, 502);
+  }
 
   return {
     provider: "mts-link",
     eventId: String(eventId),
-    meetingId: String(
-      sessionResponse.payload?.eventSessionId || sessionResponse.payload?.meetingId || eventId,
+    eventSessionId: String(eventSessionId),
+    meetingId: getFirstDefinedString(registerPayload.meetingId, sessionPayload.meetingId, eventSessionId),
+    registrantId: getFirstDefinedString(
+      registerPayload.registrantId,
+      registerPayload.participantId,
+      registerPayload.id,
     ),
-    meetingUrl: String(
-      sessionResponse.payload?.link || eventResponse.payload?.link || sessionResponse.payload?.url || "",
-    ).trim() || null,
-    roomTitle: name,
-    roomDescription: description,
+    meetingUrl,
     rawStatus: sessionResponse.status,
+    registerStatus: registerResponse.status,
   };
 }
 
@@ -2369,9 +2552,12 @@ async function createPublicBooking(booking) {
           lastSuccessMeeting: {
             createdAt: new Date().toISOString(),
             eventId: mtsLinkMeeting.eventId,
+            eventSessionId: mtsLinkMeeting.eventSessionId,
             meetingId: mtsLinkMeeting.meetingId,
+            registrantId: mtsLinkMeeting.registrantId,
             meetingUrl: mtsLinkMeeting.meetingUrl,
             rawStatus: mtsLinkMeeting.rawStatus,
+            registerStatus: mtsLinkMeeting.registerStatus,
           },
         },
       }));
@@ -2379,6 +2565,7 @@ async function createPublicBooking(booking) {
       console.warn(
         `[MTS Link] ${mtsLinkSettings.failureWarningText || "Бронь создана без ссылки MTS Link."}`,
         error.message,
+        error.responseText || "",
       );
       if (!mtsLinkSettings.fallbackWithoutLink) {
         const mtsError = new Error("MTS Link is unavailable");
@@ -2412,7 +2599,7 @@ async function createPublicBooking(booking) {
   if (mtsLinkMeeting && mtsLinkSettings.appendMeetingMetaToDescription) {
     descriptionSections.push(`Создано через MTS Link.`);
     descriptionSections.push(`MTS Link Event ID: ${mtsLinkMeeting.eventId}`);
-    descriptionSections.push(`MTS Link Session ID: ${mtsLinkMeeting.meetingId}`);
+    descriptionSections.push(`MTS Link EventSession ID: ${mtsLinkMeeting.eventSessionId}`);
   }
 
   const uid = crypto.randomUUID();
@@ -2448,6 +2635,7 @@ async function createPublicBooking(booking) {
     mtsLinkCreated: Boolean(mtsLinkMeeting?.meetingUrl),
     meetingUrl: mtsLinkMeeting?.meetingUrl || null,
     meetingId: mtsLinkMeeting?.meetingId || null,
+    eventSessionId: mtsLinkMeeting?.eventSessionId || null,
     provider: mtsLinkMeeting ? "mts-link" : null,
   };
 }
@@ -2706,9 +2894,12 @@ async function handleApi(request, requestUrl, response) {
       ...body,
       accessToken: restoreMaskedSecret(String(body.accessToken || "").trim(), config.mtsLink?.accessToken),
       lastSuccessMeeting: config.mtsLink?.lastSuccessMeeting || null,
-      lastTestAt: config.mtsLink?.lastTestAt || null,
-      lastTestStatus: config.mtsLink?.lastTestStatus || null,
-      lastTestMessage: config.mtsLink?.lastTestMessage || "",
+      lastConnectionTestAt: config.mtsLink?.lastConnectionTestAt || config.mtsLink?.lastTestAt || null,
+      lastConnectionTestStatus: config.mtsLink?.lastConnectionTestStatus || config.mtsLink?.lastTestStatus || null,
+      lastConnectionTestMessage: config.mtsLink?.lastConnectionTestMessage || config.mtsLink?.lastTestMessage || "",
+      lastCreateTestAt: config.mtsLink?.lastCreateTestAt || null,
+      lastCreateTestStatus: config.mtsLink?.lastCreateTestStatus || null,
+      lastCreateTestMessage: config.mtsLink?.lastCreateTestMessage || "",
     });
     validateMtsLinkSettings(nextSettings);
 
@@ -2736,32 +2927,46 @@ async function handleApi(request, requestUrl, response) {
         mtsLink: {
           ...config.mtsLink,
           ...nextSettings,
-          lastTestAt: new Date().toISOString(),
-          lastTestStatus: "success",
-          lastTestMessage: testResult.message,
+          lastConnectionTestAt: new Date().toISOString(),
+          lastConnectionTestStatus: "success",
+          lastConnectionTestMessage: "Доступ к API MTS Link подтверждён.",
+          lastCreateTestAt: new Date().toISOString(),
+          lastCreateTestStatus: "success",
+          lastCreateTestMessage: testResult.message,
+          lastSuccessMeeting: testResult.lastSuccessMeeting,
         },
       };
       await saveConfig(nextConfig);
       return json(response, 200, {
         ok: true,
         mtsLink: sanitizeMtsLinkForAdmin(nextConfig.mtsLink),
-        status: testResult.status,
+        accessStatus: testResult.accessStatus,
+        createStatus: testResult.createStatus,
         message: testResult.message,
       });
     } catch (error) {
+      const failureTimestamp = new Date().toISOString();
+      const failureMessage = error.message || "Не удалось проверить подключение к MTS Link.";
+      const isAccessFailure = error.mtsLinkStep === "connection";
       const nextConfig = {
         ...config,
         mtsLink: {
           ...config.mtsLink,
           ...nextSettings,
-          lastTestAt: new Date().toISOString(),
-          lastTestStatus: "error",
-          lastTestMessage: error.message,
+          lastConnectionTestAt: failureTimestamp,
+          lastConnectionTestStatus: isAccessFailure ? "error" : "success",
+          lastConnectionTestMessage: isAccessFailure ? failureMessage : "Доступ к API подтверждён.",
+          lastCreateTestAt: failureTimestamp,
+          lastCreateTestStatus: "error",
+          lastCreateTestMessage:
+            error.mtsLinkStep && error.mtsLinkStep !== "connection"
+              ? `Ошибка на шаге ${error.mtsLinkStep}: ${failureMessage}`
+              : failureMessage,
         },
       };
       await saveConfig(nextConfig);
       return json(response, error.statusCode === 400 ? 400 : 502, {
-        error: error.message || "Не удалось проверить подключение к MTS Link.",
+        error: failureMessage,
         mtsLink: sanitizeMtsLinkForAdmin(nextConfig.mtsLink),
       });
     }
