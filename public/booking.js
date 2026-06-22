@@ -34,6 +34,7 @@ const bookingSuccessCloseButton = document.querySelector("#booking-success-close
 const bookingSuccessConfirmButton = document.querySelector("#booking-success-confirm");
 const bookingSuccessMessageNode = document.querySelector("#booking-success-message");
 const stepIndicators = [...document.querySelectorAll("[data-step-indicator]")];
+const isEmbedded = new URLSearchParams(window.location.search).get("embed") === "1";
 
 const state = {
   slots: [],
@@ -44,11 +45,11 @@ const state = {
 };
 
 const PHONE_MASKS = {
-  RU: { placeholder: "+7 (999) 000-00-00", countryCode: "7", localLength: 10, trunkPrefix: "8" },
-  KZ: { placeholder: "+7 (999) 000-00-00", countryCode: "7", localLength: 10, trunkPrefix: "8" },
-  BY: { placeholder: "+375 (29) 000-00-00", countryCode: "375", localLength: 9 },
-  UZ: { placeholder: "+998 (90) 000-00-00", countryCode: "998", localLength: 9 },
-  AM: { placeholder: "+374 (10) 000-000", countryCode: "374", localLength: 8 },
+  RU: { placeholder: "(999)-999-99-99", countryCode: "7", localLength: 10, trunkPrefix: "8", groups: [3, 3, 2, 2] },
+  KZ: { placeholder: "(999)-999-99-99", countryCode: "7", localLength: 10, trunkPrefix: "8", groups: [3, 3, 2, 2] },
+  BY: { placeholder: "(99)-999-99-99", countryCode: "375", localLength: 9, groups: [2, 3, 2, 2] },
+  UZ: { placeholder: "(99)-999-99-99", countryCode: "998", localLength: 9, groups: [2, 3, 2, 2] },
+  AM: { placeholder: "(99)-999-999", countryCode: "374", localLength: 8, groups: [2, 3, 3] },
 };
 
 const FIELD_ERRORS = {
@@ -143,6 +144,20 @@ function setStatus(message, kind = "") {
   }
   statusNode.textContent = message;
   statusNode.className = `status${kind ? ` ${kind}` : ""}`;
+  notifyParentHeight();
+}
+
+function notifyParentHeight() {
+  if (!isEmbedded || window.parent === window) {
+    return;
+  }
+  const height = Math.max(
+    document.body.scrollHeight,
+    document.body.offsetHeight,
+    document.documentElement.scrollHeight,
+    document.documentElement.offsetHeight,
+  );
+  window.parent.postMessage({ type: "scrolltool-booking-resize", height }, "*");
 }
 
 function setBookingSuccessModal(open, message = "") {
@@ -255,8 +270,9 @@ function formatTimeLabel(date) {
 
 function getSlotsRange() {
   const start = toLocalDayStart(new Date());
+  start.setDate(start.getDate() + 1);
   const end = new Date(start);
-  end.setDate(end.getDate() + 28);
+  end.setDate(end.getDate() + 21);
   return { start, end };
 }
 
@@ -320,42 +336,60 @@ function renderDates() {
 
   const monthStart = state.visibleMonthStart;
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
-  const gridStart = new Date(monthStart);
-  gridStart.setDate(gridStart.getDate() - ((monthStart.getDay() + 6) % 7));
-  const gridEnd = new Date(monthEnd);
-  gridEnd.setDate(gridEnd.getDate() + (6 - ((monthEnd.getDay() + 6) % 7)));
-  const cellCount = Math.round((gridEnd - gridStart) / 86400000) + 1;
-  if (cellCount < 35) {
-    gridEnd.setDate(gridEnd.getDate() + 7);
+  const availableDays = new Set(state.slotsByDay.keys());
+  const rangeStart = getSlotsRange().start;
+  const rangeEnd = new Date(getSlotsRange().end);
+  rangeEnd.setDate(rangeEnd.getDate() - 1);
+  const leadingWeekStart = new Date(rangeStart);
+  leadingWeekStart.setDate(leadingWeekStart.getDate() - ((leadingWeekStart.getDay() + 6) % 7));
+  const firstVisibleDate = new Date(Math.max(monthStart.getTime(), leadingWeekStart.getTime()));
+  const lastVisibleDate = new Date(Math.min(monthEnd.getTime(), rangeEnd.getTime()));
+
+  if (firstVisibleDate > lastVisibleDate) {
+    datesNode.classList.add("empty");
+    datesNode.innerHTML = "<p>Свободных дат в этом месяце нет.</p>";
+    calendarPanel.classList.remove("hidden-panel");
+    return;
   }
 
-  const availableDays = new Set(state.slotsByDay.keys());
-  const currentMonth = monthStart.getMonth();
-  const minVisibleDate = toLocalDayStart(new Date());
   const html = [];
-  for (const cursor = new Date(gridStart); cursor <= gridEnd; cursor.setDate(cursor.getDate() + 1)) {
+  let isFirstRenderedCell = true;
+  for (const cursor = new Date(firstVisibleDate); cursor <= lastVisibleDate; cursor.setDate(cursor.getDate() + 1)) {
     const cellDate = new Date(cursor);
     const dayKey = toLocalDayStart(cellDate).toISOString();
-    const isCurrentMonth = cellDate.getMonth() === currentMonth;
-    const isVisibleDate = cellDate >= minVisibleDate;
-    const isAvailable = isVisibleDate && availableDays.has(dayKey);
-    const isSelected = state.selectedDayKey === dayKey;
-    const classes = ["date-option"];
-
-    if (!isCurrentMonth) {
-      classes.push("is-outside");
-    }
-    if (!isVisibleDate || !isAvailable) {
-      html.push('<span class="date-option-spacer" aria-hidden="true"></span>');
+    const isPastDisplayOnly = cellDate < rangeStart;
+    const isAvailable = availableDays.has(dayKey);
+    if (!isPastDisplayOnly && !isAvailable) {
       continue;
     }
+
+    const columnStart = isFirstRenderedCell ? ((cellDate.getDay() + 6) % 7) + 1 : null;
+    const style = columnStart ? ` style="grid-column:${columnStart}"` : "";
+    isFirstRenderedCell = false;
+
+    if (isPastDisplayOnly) {
+      html.push(
+        `<span class="date-option is-disabled" aria-hidden="true"${style}><strong>${cellDate.getDate()}</strong></span>`,
+      );
+      continue;
+    }
+
+    const isSelected = state.selectedDayKey === dayKey;
+    const classes = ["date-option"];
     if (isSelected) {
       classes.push("active");
     }
 
     html.push(
-      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}"><strong>${cellDate.getDate()}</strong></button>`,
+      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}"${style}><strong>${cellDate.getDate()}</strong></button>`,
     );
+  }
+
+  if (!html.length) {
+    datesNode.classList.add("empty");
+    datesNode.innerHTML = "<p>Свободных дат в этом месяце нет.</p>";
+    calendarPanel.classList.remove("hidden-panel");
+    return;
   }
 
   datesNode.classList.remove("empty");
@@ -472,21 +506,43 @@ function normalizePhoneDigits(value, config) {
   return digits.slice(0, config.localLength);
 }
 
+function formatPhoneDigits(digits, config) {
+  if (!digits) {
+    return "";
+  }
+
+  const groups = [];
+  let cursor = 0;
+  for (const size of config.groups || []) {
+    if (cursor >= digits.length) {
+      break;
+    }
+    groups.push(digits.slice(cursor, cursor + size));
+    cursor += size;
+  }
+
+  if (!groups.length) {
+    return digits;
+  }
+
+  const [firstGroup, ...restGroups] = groups;
+  let formatted = `(${firstGroup}`;
+  if (firstGroup.length === (config.groups?.[0] || firstGroup.length)) {
+    formatted += ")";
+  }
+
+  if (!restGroups.length) {
+    return formatted;
+  }
+
+  const joinedRest = restGroups.join("-");
+  return joinedRest ? `${formatted}-${joinedRest}` : formatted;
+}
+
 function applyPhoneMask(rawValue = "") {
   const config = getPhoneMaskConfig();
   const digits = normalizePhoneDigits(rawValue || clientPhoneInput.value, config);
-  const placeholderChars = config.placeholder.split("");
-  let digitIndex = 0;
-  const masked = placeholderChars.map((char) => {
-    if (!/\d/.test(char)) {
-      return char;
-    }
-    if (digitIndex >= digits.length) {
-      return "";
-    }
-    return digits[digitIndex++];
-  }).join("");
-  clientPhoneInput.value = masked;
+  clientPhoneInput.value = formatPhoneDigits(digits, config);
 }
 
 function syncPhoneMask() {
@@ -495,14 +551,25 @@ function syncPhoneMask() {
   applyPhoneMask(clientPhoneInput.value);
 }
 
+function getPhoneValueForSubmit() {
+  const config = getPhoneMaskConfig();
+  const localValue = clientPhoneInput.value.trim();
+  if (!localValue) {
+    return "";
+  }
+  return `+${config.countryCode} ${localValue}`;
+}
+
 function getPositionValue() {
   return positionSelect.value === "Другое" ? customPositionInput.value.trim() : positionSelect.value;
 }
 
 function syncCustomPosition() {
   const isCustom = positionSelect.value === "Другое";
+  const positionField = positionSelect.closest(".position-field");
   positionSelect.classList.toggle("hidden-panel", isCustom);
   customPositionInput.classList.toggle("hidden-panel", !isCustom);
+  positionField?.classList.toggle("has-custom-position", isCustom);
   customPositionInput.required = isCustom;
   if (isCustom) {
     customPositionInput.focus();
@@ -554,7 +621,7 @@ async function submitBooking(event) {
         end: endInput.value,
         clientName: getClientFullName(),
         clientEmail: clientEmailInput.value.trim(),
-        clientPhone: clientPhoneInput.value.trim(),
+        clientPhone: getPhoneValueForSubmit(),
         companyName: companyNameInput.value.trim(),
         position,
         additionalAttendees: additionalAttendeesInput.value.trim(),
@@ -673,7 +740,25 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+if (isEmbedded) {
+  document.body.classList.add("embedded-booking");
+}
+
 syncCustomPosition();
 syncPhoneMask();
 setStep("date");
-loadSlots();
+loadSlots().finally(() => notifyParentHeight());
+
+window.addEventListener("load", notifyParentHeight);
+window.addEventListener("resize", notifyParentHeight);
+if (window.ResizeObserver) {
+  new ResizeObserver(() => notifyParentHeight()).observe(document.body);
+}
+if (window.MutationObserver) {
+  new MutationObserver(() => notifyParentHeight()).observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    characterData: true,
+  });
+}

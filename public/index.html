@@ -10,7 +10,12 @@
     <main class="shell admin-shell">
       <section id="login-view" class="auth-card">
         <div class="brand-lockup">
-          <div class="brand-mark" aria-hidden="true">SM</div>
+          <div class="brand-mark" aria-hidden="true">
+            <img
+              src="https://static.tildacdn.com/tild6430-6165-4363-b936-623362386239/NEW_LOGO_SCROLL.svg"
+              alt=""
+            />
+          </div>
           <div>
             <p class="eyebrow">SmartM Admin</p>
             <h1>Вход в админ-панель</h1>
@@ -251,61 +256,90 @@
               </p>
             </div>
 
-            <div class="toolbar">
-              <label class="field compact-field">
-                <span>Сотрудник 1</span>
-                <select id="meeting-employee-a"></select>
-              </label>
-              <label class="field compact-field">
-                <span>Сотрудник 2</span>
-                <select id="meeting-employee-b"></select>
-              </label>
-            </div>
+            <section class="inline-rules">
+              <div class="results-head">
+                <h2>Сотрудники</h2>
+                <p class="summary">
+                  Выберите двух менеджеров, общие свободные окна которых показываются клиенту.
+                </p>
+              </div>
+
+              <div class="toolbar">
+                <label class="field compact-field">
+                  <span>Сотрудник 1</span>
+                  <select id="meeting-employee-a"></select>
+                </label>
+                <label class="field compact-field">
+                  <span>Сотрудник 2</span>
+                  <select id="meeting-employee-b"></select>
+                </label>
+              </div>
+            </section>
 
             <section class="inline-rules">
               <div class="results-head">
-                <h2>Ограничения</h2>
+                <h2>Правила доступности</h2>
                 <p class="summary">
-                  Исключи конкретные даты и задай время, в которое клиенту можно показывать слоты.
+                  Управляют датами и временем, которые доступны клиенту на странице бронирования.
                 </p>
               </div>
 
               <form id="meeting-rules-form" class="form">
-                <label class="field">
-                  <span>Исключить дату</span>
-                  <div class="toolbar">
-                    <input id="excluded-date-input" type="date" />
-                    <button id="add-excluded-date-button" class="secondary-button" type="button">
-                      Добавить дату
-                    </button>
+                <div class="availability-block">
+                  <div>
+                    <h3>Рабочие дни</h3>
+                    <p class="summary">Нерабочие дни останутся в календаре, но будут недоступны для выбора.</p>
                   </div>
-                </label>
-
-                <div id="excluded-dates-list" class="rules-list empty">
-                  <p>Исключённых дат пока нет.</p>
+                  <div class="weekday-toggle-grid" id="working-days-group" aria-label="Рабочие дни">
+                    <label class="weekday-toggle"><input type="checkbox" name="working-day" value="1" /> <span>Пн</span></label>
+                    <label class="weekday-toggle"><input type="checkbox" name="working-day" value="2" /> <span>Вт</span></label>
+                    <label class="weekday-toggle"><input type="checkbox" name="working-day" value="3" /> <span>Ср</span></label>
+                    <label class="weekday-toggle"><input type="checkbox" name="working-day" value="4" /> <span>Чт</span></label>
+                    <label class="weekday-toggle"><input type="checkbox" name="working-day" value="5" /> <span>Пт</span></label>
+                    <label class="weekday-toggle"><input type="checkbox" name="working-day" value="6" /> <span>Сб</span></label>
+                    <label class="weekday-toggle"><input type="checkbox" name="working-day" value="0" /> <span>Вс</span></label>
+                  </div>
                 </div>
 
-                <div class="split">
-                  <label class="field">
-                    <span>Начало доступного времени</span>
-                    <input id="allowed-start-time" type="time" value="09:00" />
+                <div class="availability-block">
+                  <div>
+                    <h3>Доступность встречи день в день</h3>
+                    <p class="summary">Включает сегодняшнюю дату и свободные слоты на сегодня.</p>
+                  </div>
+                  <label class="switch-field">
+                    <input id="allow-same-day" type="checkbox" />
+                    <span class="switch-control" aria-hidden="true"></span>
+                    <span>Разрешить запись на сегодня</span>
                   </label>
-                  <label class="field">
-                    <span>Конец доступного времени</span>
-                    <input id="allowed-end-time" type="time" value="18:00" />
-                  </label>
+                </div>
+
+                <div class="availability-block">
+                  <div>
+                    <h3>Рабочее время</h3>
+                    <p class="summary">Общее доступное время для всех выбранных рабочих дней.</p>
+                  </div>
+                  <div class="split">
+                    <label class="field">
+                      <span>С</span>
+                      <input id="allowed-start-time" type="time" value="09:00" />
+                    </label>
+                    <label class="field">
+                      <span>До</span>
+                      <input id="allowed-end-time" type="time" value="18:00" />
+                    </label>
+                  </div>
                 </div>
 
                 <div class="actions">
                   <button id="save-meeting-rules-button" class="primary-button" type="submit">
-                    Применить ограничения
+                    Сохранить доступность
                   </button>
                 </div>
               </form>
             </section>
 
             <div id="meeting-rules-preview" class="rules-preview">
-              <p>Без дополнительных ограничений.</p>
+              <p>Правила доступности ещё не загружены.</p>
             </div>
 
             <div class="actions">
@@ -327,7 +361,7 @@
               <div>
                 <h2>Интеграция с MTS Link</h2>
                 <p class="summary">
-                  Автоматическое создание онлайн-встречи и передача ссылки в календарное приглашение.
+                  Автоматическое создание запланированной встречи типа meeting и передача персональной ссылки в календарное приглашение.
                 </p>
               </div>
             </div>
@@ -337,7 +371,7 @@
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Подключение</h3>
-                    <p class="appearance-hint">Общий интеграционный аккаунт и проверка доступа к API MTS Link.</p>
+                    <p class="appearance-hint">Общий интеграционный аккаунт и проверка доступа к API MTS Link для сценария запланированной встречи.</p>
                   </div>
                   <div class="appearance-grid">
                     <label class="field compact-field checkbox-field">
@@ -347,6 +381,10 @@
                     <label class="field compact-field">
                       <span>Режим аккаунта</span>
                       <input id="mts-link-account-mode" type="text" value="shared" readonly />
+                    </label>
+                    <label class="field compact-field">
+                      <span>Тип встречи</span>
+                      <input id="mts-link-meeting-type" type="text" value="meeting" readonly />
                     </label>
                     <label class="field compact-field">
                       <span>Базовый URL API</span>
@@ -359,17 +397,22 @@
                   </div>
                   <div class="actions">
                     <button id="save-mts-link-button" class="primary-button" type="submit">Сохранить настройки MTS Link</button>
-                    <button id="test-mts-link-button" class="secondary-button" type="button">Проверить подключение</button>
+                    <button id="test-mts-link-button" class="secondary-button" type="button">Проверить API и создание встречи</button>
                   </div>
-                  <div id="mts-link-test-status" class="rules-preview integration-reference">
-                    <p>Проверка подключения ещё не запускалась.</p>
+                  <div class="appearance-grid">
+                    <div id="mts-link-connection-status" class="rules-preview integration-reference">
+                      <p>Проверка доступа к API ещё не запускалась.</p>
+                    </div>
+                    <div id="mts-link-create-status" class="rules-preview integration-reference">
+                      <p>Проверка создания встречи ещё не запускалась.</p>
+                    </div>
                   </div>
                 </section>
 
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Создание встречи</h3>
-                    <p class="appearance-hint">Шаблоны названия и описания, которые уйдут в MTS Link при бронировании.</p>
+                    <p class="appearance-hint">Шаблоны названия и описания, которые применяются к создаваемой запланированной встрече.</p>
                   </div>
                   <div class="appearance-grid">
                     <label class="field compact-field">
@@ -450,7 +493,7 @@
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Последняя успешно созданная встреча</h3>
-                    <p class="appearance-hint">Read-only сведения о последнем успешном ответе API.</p>
+                    <p class="appearance-hint">Read-only сведения о последней встрече, для которой удалось получить итоговую ссылку участника.</p>
                   </div>
                   <div id="mts-link-last-success" class="rules-preview integration-reference">
                     <p>Пока успешных встреч через MTS Link не было.</p>
@@ -481,6 +524,8 @@
                   </div>
                   <div class="appearance-grid">
                     <label class="field compact-field"><span>Шрифт интерфейса</span><select id="appearance-font-family"><option value='Inter, "Avenir Next", "Segoe UI", Arial, sans-serif'>Inter</option><option value='"Mulish", "Segoe UI", Arial, sans-serif'>Mulish</option><option value='Arial, "Helvetica Neue", Helvetica, sans-serif'>Arial</option><option value='Verdana, Geneva, sans-serif'>Verdana</option><option value='Tahoma, "Segoe UI", sans-serif'>Tahoma</option><option value='"Trebuchet MS", Arial, sans-serif'>Trebuchet MS</option><option value='Georgia, "Times New Roman", serif'>Georgia</option></select></label>
+                    <label class="field compact-field"><span>Вес заголовков</span><select id="appearance-title-font-weight"><option value="300">Light</option><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">ExtraBold</option><option value="900">Black</option></select></label>
+                    <label class="field compact-field"><span>Вес основного текста</span><select id="appearance-body-font-weight"><option value="300">Light</option><option value="400">Regular</option><option value="500">Medium</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">ExtraBold</option><option value="900">Black</option></select></label>
                     <label class="field compact-field"><span>Фон страницы</span><input id="appearance-page-background" class="appearance-color" type="color" /></label>
                     <label class="field compact-field"><span>Фон карточек</span><input id="appearance-card-background" class="appearance-color" type="color" /></label>
                     <label class="field compact-field"><span>Основной цвет текста</span><input id="appearance-text-color" class="appearance-color" type="color" /></label>
