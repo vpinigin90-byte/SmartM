@@ -34,9 +34,8 @@ const meetingEmployeeASelect = document.querySelector("#meeting-employee-a");
 const meetingEmployeeBSelect = document.querySelector("#meeting-employee-b");
 const meetingRulesPreviewNode = document.querySelector("#meeting-rules-preview");
 const meetingRulesForm = document.querySelector("#meeting-rules-form");
-const excludedDateInput = document.querySelector("#excluded-date-input");
-const excludedDatesListNode = document.querySelector("#excluded-dates-list");
-const addExcludedDateButton = document.querySelector("#add-excluded-date-button");
+const workingDayInputs = [...document.querySelectorAll("input[name='working-day']")];
+const allowSameDayInput = document.querySelector("#allow-same-day");
 const allowedStartTimeInput = document.querySelector("#allowed-start-time");
 const allowedEndTimeInput = document.querySelector("#allowed-end-time");
 const eventFormPanel = document.querySelector("#event-form-panel");
@@ -134,11 +133,23 @@ const state = {
   sharedMeetingSlots: [],
   csrfToken: "",
   meetingRules: {
-    excludedDates: [],
+    workingDays: [1, 2, 3, 4, 5],
+    allowSameDay: false,
     allowedStartTime: "09:00",
     allowedEndTime: "18:00",
+    timeZone: "Europe/Moscow",
   },
 };
+
+const WEEKDAY_LABELS = new Map([
+  [1, "Пн"],
+  [2, "Вт"],
+  [3, "Ср"],
+  [4, "Чт"],
+  [5, "Пт"],
+  [6, "Сб"],
+  [0, "Вс"],
+]);
 
 function setStatus(message, kind = "") {
   statusNode.textContent = message;
@@ -258,30 +269,40 @@ function renderMeetingEmployeeSelectors() {
       : state.employees[1]?.id || state.employees[0]?.id || "";
 }
 
-function renderExcludedDates() {
-  if (!state.meetingRules.excludedDates.length) {
-    excludedDatesListNode.classList.add("empty");
-    excludedDatesListNode.innerHTML = "<p>Исключённых дат пока нет.</p>";
-    return;
-  }
+function normalizeMeetingRulesForAdmin(source = {}) {
+  const workingDays = Array.isArray(source.workingDays)
+    ? source.workingDays
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6)
+    : [1, 2, 3, 4, 5];
 
-  excludedDatesListNode.classList.remove("empty");
-  excludedDatesListNode.innerHTML = state.meetingRules.excludedDates
-    .map(
-      (date) => `
-        <div class="rule-chip">
-          <span>${escapeHtml(date)}</span>
-          <button class="ghost-button" type="button" data-action="remove-excluded-date" data-date="${escapeHtml(date)}">Убрать</button>
-        </div>`,
-    )
-    .join("");
+  return {
+    workingDays: [...new Set(workingDays)].sort((left, right) => left - right),
+    allowSameDay: Boolean(source.allowSameDay),
+    allowedStartTime: source.allowedStartTime || "09:00",
+    allowedEndTime: source.allowedEndTime || "18:00",
+    timeZone: source.timeZone || "Europe/Moscow",
+  };
+}
+
+function syncMeetingRulesForm() {
+  const workingDays = new Set(state.meetingRules.workingDays);
+  workingDayInputs.forEach((input) => {
+    input.checked = workingDays.has(Number(input.value));
+  });
+  allowSameDayInput.checked = Boolean(state.meetingRules.allowSameDay);
+  allowedStartTimeInput.value = state.meetingRules.allowedStartTime;
+  allowedEndTimeInput.value = state.meetingRules.allowedEndTime;
 }
 
 function renderMeetingRulesPreview() {
-  const excludedDatesText = state.meetingRules.excludedDates.length
-    ? `Исключены даты: ${state.meetingRules.excludedDates.join(", ")}.`
-    : "Исключённых дат нет.";
-  meetingRulesPreviewNode.innerHTML = `<p>${excludedDatesText} Разрешённое время: ${escapeHtml(state.meetingRules.allowedStartTime)}-${escapeHtml(state.meetingRules.allowedEndTime)}.</p>`;
+  const workdaysText = state.meetingRules.workingDays.length
+    ? state.meetingRules.workingDays.map((day) => WEEKDAY_LABELS.get(day)).filter(Boolean).join(", ")
+    : "нет выбранных дней";
+  const sameDayText = state.meetingRules.allowSameDay
+    ? "запись день в день включена"
+    : "сегодня недоступно для записи";
+  meetingRulesPreviewNode.innerHTML = `<p>Рабочие дни: ${escapeHtml(workdaysText)}. ${escapeHtml(sameDayText)}. Рабочее время: ${escapeHtml(state.meetingRules.allowedStartTime)}-${escapeHtml(state.meetingRules.allowedEndTime)}.</p>`;
 }
 
 function fillEmployeeForm(employee = null) {
@@ -687,6 +708,13 @@ async function loadEmployees() {
   applyEmployeesConfig(config);
 }
 
+async function loadMeetingRules() {
+  const payload = await apiRequest("/api/meeting-rules");
+  state.meetingRules = normalizeMeetingRulesForAdmin(payload.meetingRules || {});
+  syncMeetingRulesForm();
+  renderMeetingRulesPreview();
+}
+
 async function saveEmployee() {
   setStatus("Сохраняю сотрудника...", "");
   saveButton.disabled = true;
@@ -817,10 +845,11 @@ async function loadSharedMeetingSlots() {
         employeeIds: [employeeAId, employeeBId],
         rangeStartIso: rangeStart.toISOString(),
         rangeEndIso: rangeEnd.toISOString(),
-        excludedDates: state.meetingRules.excludedDates,
+        workingDays: state.meetingRules.workingDays,
+        allowSameDay: state.meetingRules.allowSameDay,
         allowedStartTime: state.meetingRules.allowedStartTime,
         allowedEndTime: state.meetingRules.allowedEndTime,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timeZone: state.meetingRules.timeZone,
       }),
     });
 
@@ -839,26 +868,33 @@ async function loadSharedMeetingSlots() {
   }
 }
 
-function addExcludedDate() {
-  const value = excludedDateInput.value;
-  if (!value) {
-    return;
-  }
-
-  if (!state.meetingRules.excludedDates.includes(value)) {
-    state.meetingRules.excludedDates = [...state.meetingRules.excludedDates, value].sort();
-  }
-
-  excludedDateInput.value = "";
-  renderExcludedDates();
-  renderMeetingRulesPreview();
+function getMeetingRulesFromForm() {
+  return normalizeMeetingRulesForAdmin({
+    workingDays: workingDayInputs.filter((input) => input.checked).map((input) => Number(input.value)),
+    allowSameDay: allowSameDayInput.checked,
+    allowedStartTime: allowedStartTimeInput.value || "09:00",
+    allowedEndTime: allowedEndTimeInput.value || "18:00",
+    timeZone: state.meetingRules.timeZone,
+  });
 }
 
-function applyMeetingRules() {
-  state.meetingRules.allowedStartTime = allowedStartTimeInput.value || "09:00";
-  state.meetingRules.allowedEndTime = allowedEndTimeInput.value || "18:00";
-  renderMeetingRulesPreview();
-  setStatus("Ограничения применены.", "success");
+async function saveMeetingRules() {
+  const nextRules = getMeetingRulesFromForm();
+  setStatus("Сохраняю доступность...", "");
+
+  try {
+    const payload = await apiRequest("/api/meeting-rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nextRules),
+    });
+    state.meetingRules = normalizeMeetingRulesForAdmin(payload.meetingRules || nextRules);
+    syncMeetingRulesForm();
+    renderMeetingRulesPreview();
+    setStatus("Доступность сохранена.", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+  }
 }
 
 async function checkSlots() {
@@ -968,7 +1004,6 @@ addEmployeeButton.addEventListener("click", startNewEmployee);
 closeEmployeeModalButton.addEventListener("click", closeEmployeeModal);
 employeeModalBackdrop.addEventListener("click", closeEmployeeModal);
 loadMeetingSlotsButton.addEventListener("click", loadSharedMeetingSlots);
-addExcludedDateButton.addEventListener("click", addExcludedDate);
 toggleEventFormButton.addEventListener("click", () => {
   setEventFormVisibility(!state.eventFormVisible);
 });
@@ -977,7 +1012,7 @@ eventForm.addEventListener("submit", submitEventForm);
 eventResetButton.addEventListener("click", resetEventForm);
 meetingRulesForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  applyMeetingRules();
+  saveMeetingRules();
 });
 
 eventsNode.addEventListener("click", async (event) => {
@@ -1014,19 +1049,6 @@ employeesListNode.addEventListener("click", async (event) => {
   }
 });
 
-excludedDatesListNode.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-action='remove-excluded-date']");
-  if (!button) {
-    return;
-  }
-
-  state.meetingRules.excludedDates = state.meetingRules.excludedDates.filter(
-    (date) => date !== button.dataset.date,
-  );
-  renderExcludedDates();
-  renderMeetingRulesPreview();
-});
-
 tabButtons.forEach((button) => {
   button.addEventListener("click", () => switchTab(button.dataset.tab));
 });
@@ -1048,12 +1070,10 @@ function initializeAdmin() {
   renderEmbedCode();
   resetEventForm();
   setEventFormVisibility(false);
-  renderExcludedDates();
+  syncMeetingRulesForm();
   renderMeetingRulesPreview();
-  allowedStartTimeInput.value = state.meetingRules.allowedStartTime;
-  allowedEndTimeInput.value = state.meetingRules.allowedEndTime;
 
-  return loadEmployees()
+  return Promise.all([loadEmployees(), loadMeetingRules()])
     .then(() => {
       renderCalendars();
       renderEvents();

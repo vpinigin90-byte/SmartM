@@ -35,6 +35,8 @@ const rateLimitBuckets = new Map();
 const PUBLIC_DEMO_DURATION_MINUTES = 60;
 const PUBLIC_DEMO_GAP_MINUTES = 30;
 const DEFAULT_SLOT_RULES = {
+  workingDays: [1, 2, 3, 4, 5],
+  allowSameDay: false,
   allowedStartTime: "09:00",
   allowedEndTime: "18:00",
   timeZone: "Europe/Moscow",
@@ -83,6 +85,8 @@ const ALLOWED_FONT_FAMILIES = new Set([
 ]);
 const DEFAULT_APPEARANCE_SETTINGS = {
   fontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
+  titleFontWeight: 700,
+  bodyFontWeight: 400,
   pageBackground: '#f7f7f5',
   cardBackground: '#ffffff',
   textColor: '#18181b',
@@ -159,7 +163,15 @@ function normalizeBooleanValue(value, fallback = false) {
 }
 
 function normalizeMeetingRules(source = {}) {
+  const workingDays = Array.isArray(source.workingDays)
+    ? source.workingDays
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6)
+    : DEFAULT_SLOT_RULES.workingDays;
+
   return {
+    workingDays: [...new Set(workingDays)].sort((left, right) => left - right),
+    allowSameDay: normalizeBooleanValue(source.allowSameDay, DEFAULT_SLOT_RULES.allowSameDay),
     excludedDates: Array.isArray(source.excludedDates)
       ? source.excludedDates.map((value) => String(value || '').trim()).filter(Boolean)
       : String(source.excludedDates || '')
@@ -178,6 +190,18 @@ function normalizeAppearance(source = {}) {
     fontFamily: ALLOWED_FONT_FAMILIES.has(fontFamily)
       ? fontFamily
       : DEFAULT_APPEARANCE_SETTINGS.fontFamily,
+    titleFontWeight: normalizeSizeValue(
+      source.titleFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.titleFontWeight,
+      300,
+      900,
+    ),
+    bodyFontWeight: normalizeSizeValue(
+      source.bodyFontWeight,
+      DEFAULT_APPEARANCE_SETTINGS.bodyFontWeight,
+      300,
+      900,
+    ),
     pageBackground: normalizeColorValue(source.pageBackground, DEFAULT_APPEARANCE_SETTINGS.pageBackground),
     cardBackground: normalizeColorValue(source.cardBackground, DEFAULT_APPEARANCE_SETTINGS.cardBackground),
     textColor: normalizeColorValue(source.textColor, DEFAULT_APPEARANCE_SETTINGS.textColor),
@@ -1316,20 +1340,47 @@ function parseTimeToMinutes(value, fallback) {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+function getTodayKeyInTimeZone(timeZone) {
+  const parts = getDateTimePartsInTimeZone(new Date().toISOString(), timeZone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 function filterMeetingSlotsByRules(slots, rules = {}) {
   const excludedDates = new Set((rules.excludedDates || []).map((value) => String(value).trim()).filter(Boolean));
   const timeZone = String(rules.timeZone || "Europe/Moscow").trim() || "Europe/Moscow";
   const allowedStartMinutes = parseTimeToMinutes(rules.allowedStartTime, 0);
   const allowedEndMinutes = parseTimeToMinutes(rules.allowedEndTime, 24 * 60);
+  const workingDays = new Set(
+    (Array.isArray(rules.workingDays) && rules.workingDays.length
+      ? rules.workingDays
+      : DEFAULT_SLOT_RULES.workingDays
+    ).map((value) => Number(value)),
+  );
+  const allowSameDay = normalizeBooleanValue(rules.allowSameDay, DEFAULT_SLOT_RULES.allowSameDay);
+  const todayKey = getTodayKeyInTimeZone(timeZone);
 
   return slots.filter((slot) => {
     const startParts = getDateTimePartsInTimeZone(slot.start, timeZone);
     const endParts = getDateTimePartsInTimeZone(slot.end, timeZone);
     const localDate = `${startParts.year}-${startParts.month}-${startParts.day}`;
+    const endLocalDate = `${endParts.year}-${endParts.month}-${endParts.day}`;
     const startMinutes = Number(startParts.hour) * 60 + Number(startParts.minute);
     const endMinutes = Number(endParts.hour) * 60 + Number(endParts.minute);
+    const weekday = new Date(`${localDate}T00:00:00.000Z`).getUTCDay();
+
+    if (endLocalDate !== localDate) {
+      return false;
+    }
 
     if (excludedDates.has(localDate)) {
+      return false;
+    }
+
+    if (!workingDays.has(weekday)) {
+      return false;
+    }
+
+    if (!allowSameDay && localDate === todayKey) {
       return false;
     }
 
@@ -2079,7 +2130,14 @@ async function fetchSharedMeetingSlots(employeeIds, rangeStartIso, rangeEndIso, 
 }
 
 function getPublicSlotRules(source = {}) {
-  return {
+  return normalizeMeetingRules({
+    workingDays: Array.isArray(source.workingDays)
+      ? source.workingDays
+      : String(source.workingDays || "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean),
+    allowSameDay: source.allowSameDay,
     excludedDates: Array.isArray(source.excludedDates)
       ? source.excludedDates
       : String(source.excludedDates || "")
@@ -2089,7 +2147,7 @@ function getPublicSlotRules(source = {}) {
     allowedStartTime: String(source.allowedStartTime || DEFAULT_SLOT_RULES.allowedStartTime).trim(),
     allowedEndTime: String(source.allowedEndTime || DEFAULT_SLOT_RULES.allowedEndTime).trim(),
     timeZone: String(source.timeZone || DEFAULT_SLOT_RULES.timeZone).trim(),
-  };
+  });
 }
 
 function getDefaultPublicRange() {
@@ -2532,10 +2590,7 @@ async function handleApi(request, requestUrl, response) {
     const config = await loadConfig();
     const rules = getPublicSlotRules({
       ...config.meetingRules,
-      allowedStartTime: requestUrl.searchParams.get("allowedStartTime") || config.meetingRules.allowedStartTime,
-      allowedEndTime: requestUrl.searchParams.get("allowedEndTime") || config.meetingRules.allowedEndTime,
       timeZone: requestUrl.searchParams.get("timeZone") || config.meetingRules.timeZone,
-      excludedDates: requestUrl.searchParams.get("excludedDates") || config.meetingRules.excludedDates,
     });
 
     try {
@@ -2617,6 +2672,25 @@ async function handleApi(request, requestUrl, response) {
     };
     await saveConfig(nextConfig);
     return json(response, 200, { appearance: normalizeConfig(nextConfig).appearance });
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/meeting-rules") {
+    const config = await loadConfig();
+    return json(response, 200, { meetingRules: config.meetingRules });
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/meeting-rules") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request);
+    const nextConfig = {
+      ...config,
+      meetingRules: normalizeMeetingRules({
+        ...config.meetingRules,
+        ...body,
+      }),
+    };
+    await saveConfig(nextConfig);
+    return json(response, 200, { meetingRules: nextConfig.meetingRules });
   }
 
   if (request.method === "GET" && requestUrl.pathname === "/api/integrations/mts-link") {
@@ -2907,7 +2981,9 @@ async function handleApi(request, requestUrl, response) {
     const rangeStartIso = String(body.rangeStartIso || "").trim();
     const rangeEndIso = String(body.rangeEndIso || "").trim();
     const rules = {
-      excludedDates: Array.isArray(body.excludedDates) ? body.excludedDates : [],
+      workingDays: Array.isArray(body.workingDays) ? body.workingDays : DEFAULT_SLOT_RULES.workingDays,
+      allowSameDay: body.allowSameDay,
+      excludedDates: [],
       allowedStartTime: String(body.allowedStartTime || "").trim(),
       allowedEndTime: String(body.allowedEndTime || "").trim(),
       timeZone: String(body.timeZone || "").trim(),
