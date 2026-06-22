@@ -42,6 +42,10 @@ const state = {
   selectedDayKey: null,
   selectedSlot: null,
   visibleMonthStart: null,
+  meetingRules: {
+    workingDays: [1, 2, 3, 4, 5],
+    allowSameDay: false,
+  },
 };
 
 const PHONE_MASKS = {
@@ -275,6 +279,17 @@ function getSlotsRange() {
   return { start, end };
 }
 
+function normalizeMeetingRules(source = {}) {
+  const workingDays = Array.isArray(source.workingDays)
+    ? source.workingDays.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6)
+    : [1, 2, 3, 4, 5];
+
+  return {
+    workingDays: [...new Set(workingDays)].sort((left, right) => left - right),
+    allowSameDay: Boolean(source.allowSameDay),
+  };
+}
+
 async function apiRequest(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json();
@@ -338,6 +353,8 @@ function renderDates() {
   const availableDays = new Set(state.slotsByDay.keys());
   const rangeStart = getSlotsRange().start;
   const rangeEnd = new Date(getSlotsRange().end);
+  const todayStart = toLocalDayStart(new Date());
+  const workingDays = new Set(state.meetingRules.workingDays);
   rangeEnd.setDate(rangeEnd.getDate() - 1);
   const leadingWeekStart = new Date(rangeStart);
   leadingWeekStart.setDate(leadingWeekStart.getDate() - ((leadingWeekStart.getDay() + 6) % 7));
@@ -357,8 +374,13 @@ function renderDates() {
     const cellDate = new Date(cursor);
     const dayKey = toLocalDayStart(cellDate).toISOString();
     const isPastDisplayOnly = cellDate < rangeStart;
+    const isSameDayDisabled =
+      !state.meetingRules.allowSameDay && cellDate.getTime() === todayStart.getTime();
+    const isWeekdayDisabled = !workingDays.has(cellDate.getDay());
     const isAvailable = availableDays.has(dayKey);
-    if (!isPastDisplayOnly && !isAvailable) {
+    const isDisabledDisplayOnly = isPastDisplayOnly || isSameDayDisabled || isWeekdayDisabled;
+
+    if (!isDisabledDisplayOnly && !isAvailable) {
       continue;
     }
 
@@ -366,7 +388,7 @@ function renderDates() {
     const style = columnStart ? ` style="grid-column:${columnStart}"` : "";
     isFirstRenderedCell = false;
 
-    if (isPastDisplayOnly) {
+    if (isDisabledDisplayOnly) {
       html.push(
         `<span class="date-option is-disabled" aria-hidden="true"${style}><strong>${cellDate.getDate()}</strong></span>`,
       );
@@ -433,6 +455,7 @@ async function loadSlots() {
     const payload = await apiRequest(`/api/public/slots?${params.toString()}`);
     state.slots = payload.slots || [];
     state.slotsByDay = groupSlotsByDay(state.slots);
+    state.meetingRules = normalizeMeetingRules(payload.meetingRules || {});
     state.selectedDayKey = null;
     state.selectedSlot = null;
     resetSelection(false);

@@ -458,11 +458,13 @@ body.booking-page.embedded-booking .booking-shell {
 
 .date-option.is-disabled,
 .date-option:disabled {
-  color: color-mix(in srgb, var(--booking-date-muted-color) 68%, white);
+  color: color-mix(in srgb, var(--booking-date-muted-color) 52%, white);
   cursor: default;
   opacity: 1;
   background: transparent;
   box-shadow: none;
+  border-color: transparent;
+  pointer-events: none;
 }
 
 .date-option.is-outside {
