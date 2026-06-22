@@ -1212,6 +1212,7 @@ function buildEventIcs(eventData) {
   const summary = escapeIcsText(eventData.summary || "New event");
   const description = escapeIcsText(eventData.description || "");
   const location = escapeIcsText(eventData.location || "");
+  const conferenceUrl = String(eventData.conferenceUrl || "").replace(/[\r\n]/g, "").trim();
 
   const lines = [
     "BEGIN:VCALENDAR",
@@ -1232,6 +1233,11 @@ function buildEventIcs(eventData) {
 
   if (location) {
     lines.push(`LOCATION:${location}`);
+  }
+
+  if (conferenceUrl) {
+    lines.push(`URL:${conferenceUrl}`);
+    lines.push(`CONFERENCE;VALUE=URI;FEATURE=VIDEO:${conferenceUrl}`);
   }
 
   if (Array.isArray(eventData.attendees)) {
@@ -2583,14 +2589,9 @@ async function createPublicBooking(booking) {
     }
   }
 
-  const locationParts = ["Онлайн"];
-  if (mtsLinkMeeting?.meetingUrl && mtsLinkSettings.insertLinkIntoLocation) {
-    locationParts.push(mtsLinkMeeting.meetingUrl);
-  }
-
   const descriptionSections = [
-    "Заявка на демо через SmartM.",
-    `Клиент: ${booking.clientName}`,
+    "Заявка на демо:",
+    booking.clientName,
     `Email: ${booking.clientEmail}`,
     `Телефон: ${booking.clientPhone}`,
     `Компания: ${booking.companyName}`,
@@ -2601,13 +2602,8 @@ async function createPublicBooking(booking) {
     booking.comment ? `Комментарий: ${booking.comment}` : "",
   ];
 
-  if (mtsLinkMeeting?.meetingUrl && mtsLinkSettings.insertLinkIntoDescription) {
+  if (mtsLinkMeeting?.meetingUrl) {
     descriptionSections.push(`Ссылка на встречу: ${mtsLinkMeeting.meetingUrl}`);
-  }
-  if (mtsLinkMeeting && mtsLinkSettings.appendMeetingMetaToDescription) {
-    descriptionSections.push(`Создано через MTS Link.`);
-    descriptionSections.push(`MTS Link Event ID: ${mtsLinkMeeting.eventId}`);
-    descriptionSections.push(`MTS Link EventSession ID: ${mtsLinkMeeting.eventSessionId}`);
   }
 
   const uid = crypto.randomUUID();
@@ -2617,7 +2613,8 @@ async function createPublicBooking(booking) {
     uid,
     summary: `Демо Scrolltool для ${booking.companyName}`,
     description,
-    location: locationParts.filter(Boolean).join(" · "),
+    location: "Онлайн",
+    conferenceUrl: mtsLinkMeeting?.meetingUrl || "",
     start: booking.start,
     end: booking.end,
     attendees: [
