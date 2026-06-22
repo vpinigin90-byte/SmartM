@@ -1627,13 +1627,21 @@ function getFirstDefinedNumber(...values) {
   return null;
 }
 
+function formatMtsLinkDateTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toISOString().replace(/\.\d{3}Z$/, "+00:00");
+}
+
 function buildMtsLinkEventPayload(booking, employee, settings) {
   const templateContext = getMtsLinkTemplateContext(booking, employee, settings);
   return {
     type: settings.meetingType || "meeting",
     name: renderMtsLinkTemplate(settings.defaultRoomTitleTemplate, templateContext),
     description: renderMtsLinkTemplate(settings.defaultRoomDescriptionTemplate, templateContext),
-    startsAtTimestamp: booking.start,
+    startsAtTimestamp: formatMtsLinkDateTime(booking.start),
     startType: "autostart",
     lang: "RU",
     "accessSettings[isPasswordRequired]": "0",
@@ -1644,7 +1652,7 @@ function buildMtsLinkEventPayload(booking, employee, settings) {
 
 function buildMtsLinkSessionPayload(booking, settings) {
   return {
-    startsAtTimestamp: booking.start,
+    startsAtTimestamp: formatMtsLinkDateTime(booking.start),
     startType: "autostart",
     lang: "RU",
   };
