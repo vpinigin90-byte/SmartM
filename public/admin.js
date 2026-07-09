@@ -17,7 +17,6 @@ const summaryNode = document.querySelector("#summary");
 const eventsSummaryNode = document.querySelector("#events-summary");
 const meetingSummaryNode = document.querySelector("#meeting-summary");
 const slotsNode = document.querySelector("#slots");
-const meetingSlotsNode = document.querySelector("#meeting-slots");
 const eventsNode = document.querySelector("#events");
 const employeesListNode = document.querySelector("#employees-list");
 const saveButton = document.querySelector("#save-button");
@@ -129,7 +128,6 @@ const state = {
   eventsRangeStart: null,
   eventsRangeEnd: null,
   eventFormVisible: false,
-  sharedMeetingSlots: [],
   csrfToken: "",
   meetingRules: {
     workingDays: [1, 2, 3, 4, 5],
@@ -524,49 +522,6 @@ function renderSlots(result, rangeStart, rangeEnd) {
   slotsNode.innerHTML = html;
 }
 
-function renderSharedMeetingSlots(slots, employeeNames, rangeStart, rangeEnd) {
-  if (!meetingSlotsNode) {
-    return;
-  }
-
-  if (!slots.length) {
-    meetingSlotsNode.classList.add("empty");
-    meetingSlotsNode.innerHTML = "<p>Общих слотов на ближайшие 3 недели не найдено.</p>";
-    meetingSummaryNode.textContent = `Проверены сотрудники: ${employeeNames.join(" и ")}. Общих слотов нет.`;
-    return;
-  }
-
-  const buckets = new Map();
-  for (let cursor = toLocalDayStart(rangeStart); cursor < rangeEnd; cursor = toLocalDayEnd(cursor)) {
-    buckets.set(toLocalDayStart(cursor).toISOString(), []);
-  }
-
-  for (const slot of slots) {
-    const dayKey = toLocalDayStart(new Date(slot.start)).toISOString();
-    if (!buckets.has(dayKey)) {
-      buckets.set(dayKey, []);
-    }
-    buckets.get(dayKey).push(slot);
-  }
-
-  meetingSummaryNode.textContent = `Проверены сотрудники: ${employeeNames.join(" и ")}. Длительность слота 1 час, шаг между стартами 1 час 30 минут, горизонт 3 недели, действуют ограничения по датам и времени.`;
-  meetingSlotsNode.classList.remove("empty");
-  meetingSlotsNode.innerHTML = [...buckets.entries()]
-    .map(([dayKey, daySlots]) => {
-      const dayDate = new Date(dayKey);
-      const list = daySlots.length
-        ? `<ul class="slot-list">${daySlots
-            .map(
-              (slot) => `<li class="slot-item"><strong>${formatInterval(new Date(slot.start), new Date(slot.end))}</strong><span>оба свободны</span></li>`,
-            )
-            .join("")}</ul>`
-        : "<p>Нет общих слотов.</p>";
-
-      return `<article class="day-card"><h3>${formatDateLabel(dayDate)}</h3>${list}</article>`;
-    })
-    .join("");
-}
-
 function renderCalendars() {
   if (!state.calendars.length) {
     calendarSelect.innerHTML = '<option value="">Календари не найдены</option>';
@@ -817,57 +772,6 @@ async function loadEvents() {
     setStatus(error.message, "error");
   } finally {
     loadEventsButton.disabled = false;
-  }
-}
-
-async function loadSharedMeetingSlots() {
-  const employeeAId = meetingEmployeeASelect.value;
-  const employeeBId = meetingEmployeeBSelect.value;
-
-  if (!employeeAId || !employeeBId) {
-    setStatus("Выберите двух сотрудников.", "error");
-    return;
-  }
-
-  if (employeeAId === employeeBId) {
-    setStatus("Для встречи нужны два разных сотрудника.", "error");
-    return;
-  }
-
-  const rangeStart = toLocalDayStart(new Date());
-  const rangeEnd = new Date(rangeStart);
-  rangeEnd.setDate(rangeEnd.getDate() + 21);
-  loadMeetingSlotsButton.disabled = true;
-  setStatus("Ищу общие слоты встречи...", "");
-
-  try {
-    const payload = await apiRequest("/api/meeting-slots", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        employeeIds: [employeeAId, employeeBId],
-        rangeStartIso: rangeStart.toISOString(),
-        rangeEndIso: rangeEnd.toISOString(),
-        workingDays: state.meetingRules.workingDays,
-        allowSameDay: state.meetingRules.allowSameDay,
-        allowedStartTime: state.meetingRules.allowedStartTime,
-        allowedEndTime: state.meetingRules.allowedEndTime,
-        timeZone: state.meetingRules.timeZone,
-      }),
-    });
-
-    state.sharedMeetingSlots = payload.slots || [];
-    renderSharedMeetingSlots(
-      state.sharedMeetingSlots,
-      (payload.employees || []).map((employee) => employee.name),
-      rangeStart,
-      rangeEnd,
-    );
-    setStatus("Общие слоты загружены.", "success");
-  } catch (error) {
-    setStatus(error.message, "error");
-  } finally {
-    loadMeetingSlotsButton.disabled = false;
   }
 }
 
