@@ -8,13 +8,14 @@ const slotsNode = document.querySelector("#public-slots");
 const statusNode = document.querySelector("#booking-status");
 const selectedDateSummaryNode = document.querySelector("#selected-date-summary");
 const selectedDatePanel = document.querySelector("#selected-date-panel");
-const changeDateButton = document.querySelector("#change-date-button");
 const bookingTitleNode = document.querySelector("#booking-title");
 const bookingWidget = document.querySelector(".smartm-widget");
 const formPanel = document.querySelector("#booking-form-panel");
 const form = document.querySelector("#booking-form");
 const startInput = document.querySelector("#booking-start");
 const endInput = document.querySelector("#booking-end");
+const bookingWebsiteInput = document.querySelector("#booking-website");
+const clientFormTitleNode = document.querySelector("#client-form-title");
 const selectedSlotSummaryNode = document.querySelector("#selected-slot-summary");
 const clientFirstNameInput = document.querySelector("#client-first-name");
 const clientLastNameInput = document.querySelector("#client-last-name");
@@ -26,15 +27,19 @@ const positionSelect = document.querySelector("#client-position");
 const customPositionInput = document.querySelector("#custom-position");
 const additionalAttendeesInput = document.querySelector("#additional-attendees");
 const clientCommentInput = document.querySelector("#client-comment");
+const addCommentButton = document.querySelector("#add-comment-button");
 const bookButton = document.querySelector("#book-slot-button");
+const submitProxyButton = document.querySelector(".booking-submit-proxy");
+const cancelButtons = [...document.querySelectorAll(".booking-cancel-button")];
 const changeTimeButton = document.querySelector("#change-time-button");
 const bookingSuccessModal = document.querySelector("#booking-success-modal");
 const bookingSuccessBackdrop = document.querySelector("#booking-success-backdrop");
 const bookingSuccessCloseButton = document.querySelector("#booking-success-close");
-const bookingSuccessConfirmButton = document.querySelector("#booking-success-confirm");
 const bookingSuccessMessageNode = document.querySelector("#booking-success-message");
 const stepIndicators = [...document.querySelectorAll("[data-step-indicator]")];
-const isEmbedded = new URLSearchParams(window.location.search).get("embed") === "1";
+const urlParams = new URLSearchParams(window.location.search);
+const isEmbedded = urlParams.get("embed") === "1";
+const showSuccessPreview = urlParams.get("successPreview") === "1";
 
 const state = {
   slots: [],
@@ -42,6 +47,8 @@ const state = {
   selectedDayKey: null,
   selectedSlot: null,
   visibleMonthStart: null,
+  isLoadingSlots: true,
+  validationStarted: false,
   meetingRules: {
     workingDays: [1, 2, 3, 4, 5],
     allowSameDay: false,
@@ -75,6 +82,20 @@ function setFieldState(input, errorNode, message = "") {
   }
 }
 
+function clearBookingFormErrors() {
+  document.querySelectorAll(".field.invalid").forEach((field) => field.classList.remove("invalid"));
+  document.querySelectorAll(".field-error").forEach((node) => {
+    node.textContent = "";
+  });
+}
+
+function validateAfterSubmit(validate) {
+  if (!state.validationStarted) {
+    return;
+  }
+  validate();
+}
+
 function validateRequiredText(input, errorNode, message) {
   const value = input.value.trim();
   const error = value ? "" : message;
@@ -103,10 +124,9 @@ function validatePhoneField() {
 }
 
 function validatePositionField() {
-  const hasValue = Boolean(positionSelect.value);
   setFieldState(positionSelect, FIELD_ERRORS.position, "");
-  positionSelect.closest(".field")?.classList.toggle("invalid", !hasValue);
-  return hasValue;
+  positionSelect.closest(".field")?.classList.remove("invalid");
+  return true;
 }
 
 function validateCustomPositionField() {
@@ -118,13 +138,13 @@ function validateCustomPositionField() {
 }
 
 function validateBookingForm() {
+  state.validationStarted = true;
   const checks = [
     () => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя."),
     () => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию."),
     validateEmailField,
     validatePhoneField,
     () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."),
-    validatePositionField,
     validateCustomPositionField,
   ];
 
@@ -214,6 +234,15 @@ function formatDateLabel(date) {
   }).format(date);
 }
 
+function formatDatePanelTitle(date) {
+  const formatted = new Intl.DateTimeFormat("ru-RU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
+  return `${formatted.charAt(0).toUpperCase()}${formatted.slice(1)}`;
+}
+
 function formatShortDateLabel(date) {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
@@ -255,6 +284,14 @@ function clampMonthToBounds(monthStart, bounds) {
   return target;
 }
 
+function hasAvailableSlotsInMonth(monthStart) {
+  const month = startOfMonth(monthStart);
+  return [...state.slotsByDay.keys()].some((dayKey) => {
+    const day = new Date(dayKey);
+    return day.getFullYear() === month.getFullYear() && day.getMonth() === month.getMonth();
+  });
+}
+
 function formatDateTimeLabel(date) {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
@@ -269,6 +306,16 @@ function formatTimeLabel(date) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatSelectedSlotTitle(startIso, endIso) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const dateLabel = new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+  }).format(start);
+  return `${dateLabel}, ${formatTimeLabel(start)} – ${formatTimeLabel(end)}`;
 }
 
 function getSlotsRange() {
@@ -312,6 +359,18 @@ function groupSlotsByDay(slots) {
 }
 
 function renderDates() {
+  if (state.isLoadingSlots) {
+    if (calendarPrevButton) {
+      calendarPrevButton.disabled = true;
+      calendarPrevButton.classList.add("hidden-panel");
+    }
+    if (calendarNextButton) {
+      calendarNextButton.disabled = true;
+      calendarNextButton.classList.add("hidden-panel");
+    }
+    return;
+  }
+
   const bounds = getAvailableMonthBounds();
   if (!bounds) {
     state.visibleMonthStart = startOfMonth(new Date());
@@ -326,10 +385,13 @@ function renderDates() {
     }
     if (calendarPrevButton) {
       calendarPrevButton.disabled = true;
+      calendarPrevButton.classList.add("hidden-panel");
     }
     if (calendarNextButton) {
       calendarNextButton.disabled = true;
+      calendarNextButton.classList.add("hidden-panel");
     }
+    renderSlotsForSelectedDate();
     return;
   }
 
@@ -342,10 +404,16 @@ function renderDates() {
     calendarMonthLabelNode.textContent = formatCalendarMonthLabel(state.visibleMonthStart);
   }
   if (calendarPrevButton) {
-    calendarPrevButton.disabled = state.visibleMonthStart <= bounds.min;
+    const previousMonth = addMonths(state.visibleMonthStart, -1);
+    const canShowPrevious = state.visibleMonthStart > bounds.min && hasAvailableSlotsInMonth(previousMonth);
+    calendarPrevButton.disabled = !canShowPrevious;
+    calendarPrevButton.classList.toggle("hidden-panel", !canShowPrevious);
   }
   if (calendarNextButton) {
-    calendarNextButton.disabled = state.visibleMonthStart >= bounds.max;
+    const nextMonth = addMonths(state.visibleMonthStart, 1);
+    const canShowNext = state.visibleMonthStart < bounds.max && hasAvailableSlotsInMonth(nextMonth);
+    calendarNextButton.disabled = !canShowNext;
+    calendarNextButton.classList.toggle("hidden-panel", !canShowNext);
   }
 
   const monthStart = state.visibleMonthStart;
@@ -380,10 +448,6 @@ function renderDates() {
     const isAvailable = availableDays.has(dayKey);
     const isDisabledDisplayOnly = isPastDisplayOnly || isSameDayDisabled || isWeekdayDisabled;
 
-    if (!isDisabledDisplayOnly && !isAvailable) {
-      continue;
-    }
-
     const columnStart = isFirstRenderedCell ? ((cellDate.getDay() + 6) % 7) + 1 : null;
     const style = columnStart ? ` style="grid-column:${columnStart}"` : "";
     isFirstRenderedCell = false;
@@ -400,9 +464,12 @@ function renderDates() {
     if (isSelected) {
       classes.push("active");
     }
+    if (isAvailable) {
+      classes.push("has-slots");
+    }
 
     html.push(
-      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}"${style}><strong>${cellDate.getDate()}</strong></button>`,
+      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}" data-has-slots="${isAvailable ? "1" : "0"}"${style}><strong>${cellDate.getDate()}</strong></button>`,
     );
   }
 
@@ -419,19 +486,27 @@ function renderDates() {
 }
 
 function renderSlotsForSelectedDate() {
-  const slots = state.slotsByDay.get(state.selectedDayKey) || [];
-  if (!state.selectedDayKey || !slots.length) {
-    selectedDatePanel.classList.add("hidden-panel");
-    slotsPanel.classList.add("hidden-panel");
-    calendarPanel.classList.remove("hidden-panel");
+  if (!state.selectedDayKey) {
+    selectedDateSummaryNode.textContent = "Выберите дату";
+    selectedDatePanel.classList.remove("hidden-panel");
+    slotsPanel.classList.remove("hidden-panel");
+    slotsNode.classList.add("empty");
+    slotsNode.innerHTML = "<p>Слоты появятся здесь после выбора даты в календаре.</p>";
     return;
   }
 
+  const slots = state.slotsByDay.get(state.selectedDayKey) || [];
   const selectedDate = new Date(state.selectedDayKey);
-  selectedDateSummaryNode.textContent = formatDateLabel(selectedDate);
+  selectedDateSummaryNode.textContent = formatDatePanelTitle(selectedDate);
   selectedDatePanel.classList.remove("hidden-panel");
-  calendarPanel.classList.add("hidden-panel");
   slotsPanel.classList.remove("hidden-panel");
+
+  if (!slots.length) {
+    slotsNode.classList.add("empty");
+    slotsNode.innerHTML = "<p>На эту дату свободных слотов нет. Выберите другой день.</p>";
+    return;
+  }
+
   slotsNode.classList.remove("empty");
   slotsNode.innerHTML = slots
     .map(
@@ -445,6 +520,8 @@ function renderSlotsForSelectedDate() {
 
 async function loadSlots() {
   const { start, end } = getSlotsRange();
+  state.isLoadingSlots = true;
+  renderDates();
   setStatus("", "");
 
   try {
@@ -458,15 +535,26 @@ async function loadSlots() {
     state.meetingRules = normalizeMeetingRules(payload.meetingRules || {});
     state.selectedDayKey = null;
     state.selectedSlot = null;
+    state.isLoadingSlots = false;
     resetSelection(false);
     setStep("date");
     renderDates();
+    renderSlotsForSelectedDate();
   } catch (error) {
+    state.isLoadingSlots = false;
     datesNode.classList.add("empty");
     calendarPanel.classList.remove("hidden-panel");
     datesNode.innerHTML = "<p>Не удалось загрузить даты.</p>";
     selectedDatePanel.classList.add("hidden-panel");
     slotsPanel.classList.add("hidden-panel");
+    if (calendarPrevButton) {
+      calendarPrevButton.disabled = true;
+      calendarPrevButton.classList.add("hidden-panel");
+    }
+    if (calendarNextButton) {
+      calendarNextButton.disabled = true;
+      calendarNextButton.classList.add("hidden-panel");
+    }
     setStatus(error.message, "error");
   }
 }
@@ -475,19 +563,27 @@ function selectDate(dayKey) {
   state.selectedDayKey = dayKey;
   state.visibleMonthStart = startOfMonth(new Date(dayKey));
   state.selectedSlot = null;
+  state.validationStarted = false;
+  clearBookingFormErrors();
   formPanel.classList.add("hidden-panel");
   setStep("time");
+  renderDates();
   renderSlotsForSelectedDate();
 }
 
 function selectSlot(start, end) {
   state.selectedSlot = { start, end };
+  state.validationStarted = false;
+  clearBookingFormErrors();
   startInput.value = start;
   endInput.value = end;
   slotsNode.querySelectorAll(".time-option").forEach((button) => {
     button.classList.toggle("active", button.dataset.start === start && button.dataset.end === end);
   });
-  selectedSlotSummaryNode.textContent = `Вы выбрали ${formatDateTimeLabel(new Date(start))} - ${formatTimeLabel(new Date(end))}.`;
+  if (clientFormTitleNode) {
+    clientFormTitleNode.textContent = formatSelectedSlotTitle(start, end);
+  }
+  selectedSlotSummaryNode.textContent = "Заполните данные, чтобы назначить встречу и отправить приглашение.";
   bookingWidget.classList.add("hidden-panel");
   formPanel.classList.remove("hidden-panel");
   setStep("details");
@@ -598,21 +694,64 @@ function syncCustomPosition() {
   }
 }
 
+function setCommentFieldOpen(open) {
+  if (!addCommentButton || !clientCommentInput) {
+    return;
+  }
+  addCommentButton.classList.toggle("hidden-panel", open);
+  clientCommentInput.classList.toggle("hidden-panel", !open);
+  if (open) {
+    clientCommentInput.focus();
+  }
+}
+
 function resetSelection(resetForm = true) {
   state.selectedSlot = null;
+  state.validationStarted = false;
   startInput.value = "";
   endInput.value = "";
   if (resetForm) {
     form.reset();
     syncCustomPosition();
     syncPhoneMask();
+    setCommentFieldOpen(false);
   }
   bookingWidget.classList.toggle("hidden-panel", Boolean(state.selectedSlot));
   formPanel.classList.add("hidden-panel");
-  calendarPanel.classList.toggle("hidden-panel", Boolean(state.selectedDayKey));
-  selectedDatePanel.classList.toggle("hidden-panel", !state.selectedDayKey);
-  slotsPanel.classList.toggle("hidden-panel", !state.selectedDayKey);
+  calendarPanel.classList.remove("hidden-panel");
+  selectedDatePanel.classList.remove("hidden-panel");
+  slotsPanel.classList.remove("hidden-panel");
   setStep(state.selectedDayKey ? "time" : "date");
+  renderSlotsForSelectedDate();
+}
+
+function resetBookingFlow() {
+  state.selectedDayKey = null;
+  state.selectedSlot = null;
+  state.validationStarted = false;
+  startInput.value = "";
+  endInput.value = "";
+  form.reset();
+  syncCustomPosition();
+  syncPhoneMask();
+  setCommentFieldOpen(false);
+  clearBookingFormErrors();
+  bookingWidget.classList.remove("hidden-panel");
+  formPanel.classList.add("hidden-panel");
+  selectedDatePanel.classList.remove("hidden-panel");
+  slotsPanel.classList.remove("hidden-panel");
+  calendarPanel.classList.remove("hidden-panel");
+  setStatus("", "");
+  setStep("date");
+  renderDates();
+  renderSlotsForSelectedDate();
+}
+
+function setSubmitButtonsDisabled(disabled) {
+  bookButton.disabled = disabled;
+  if (submitProxyButton) {
+    submitProxyButton.disabled = disabled;
+  }
 }
 
 async function submitBooking(event) {
@@ -628,7 +767,7 @@ async function submitBooking(event) {
   }
 
   const position = getPositionValue();
-  bookButton.disabled = true;
+  setSubmitButtonsDisabled(true);
   setStatus("Бронируем встречу...", "");
 
   try {
@@ -645,6 +784,7 @@ async function submitBooking(event) {
         position,
         additionalAttendees: additionalAttendeesInput.value.trim(),
         comment: clientCommentInput.value.trim(),
+        website: bookingWebsiteInput?.value || "",
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     });
@@ -658,7 +798,7 @@ async function submitBooking(event) {
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
-    bookButton.disabled = false;
+    setSubmitButtonsDisabled(false);
   }
 }
 
@@ -702,55 +842,50 @@ if (calendarNextButton) {
 }
 changeTimeButton.addEventListener("click", () => {
   state.selectedSlot = null;
+  state.validationStarted = false;
   startInput.value = "";
   endInput.value = "";
+  clearBookingFormErrors();
   bookingWidget.classList.remove("hidden-panel");
   formPanel.classList.add("hidden-panel");
+  calendarPanel.classList.remove("hidden-panel");
   slotsPanel.classList.remove("hidden-panel");
   selectedDatePanel.classList.remove("hidden-panel");
-  calendarPanel.classList.add("hidden-panel");
   setStep("time");
-});
-changeDateButton.addEventListener("click", () => {
-  state.selectedDayKey = null;
-  state.selectedSlot = null;
-  bookingWidget.classList.remove("hidden-panel");
-  selectedDatePanel.classList.add("hidden-panel");
-  slotsPanel.classList.add("hidden-panel");
-  calendarPanel.classList.remove("hidden-panel");
-  formPanel.classList.add("hidden-panel");
-  setStep("date");
   renderDates();
+  renderSlotsForSelectedDate();
+});
+cancelButtons.forEach((button) => {
+  button.addEventListener("click", resetBookingFlow);
 });
 positionSelect.addEventListener("change", () => {
   syncCustomPosition();
-  validatePositionField();
-  validateCustomPositionField();
+  validateAfterSubmit(validateCustomPositionField);
 });
 clientPhoneCountryInput.addEventListener("change", () => {
   syncPhoneMask();
-  validatePhoneField();
+  validateAfterSubmit(validatePhoneField);
 });
 clientPhoneInput.addEventListener("input", () => {
   applyPhoneMask(clientPhoneInput.value);
-  validatePhoneField();
+  validateAfterSubmit(validatePhoneField);
 });
-clientFirstNameInput.addEventListener("blur", () => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя."));
-clientFirstNameInput.addEventListener("input", () => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя."));
-clientLastNameInput.addEventListener("blur", () => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию."));
-clientLastNameInput.addEventListener("input", () => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию."));
-clientEmailInput.addEventListener("input", validateEmailField);
-clientEmailInput.addEventListener("blur", validateEmailField);
-companyNameInput.addEventListener("blur", () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."));
-companyNameInput.addEventListener("input", () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."));
-customPositionInput.addEventListener("input", validateCustomPositionField);
-customPositionInput.addEventListener("blur", validateCustomPositionField);
+clientFirstNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
+clientFirstNameInput.addEventListener("input", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
+clientLastNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию.")));
+clientLastNameInput.addEventListener("input", () => validateAfterSubmit(() => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию.")));
+clientEmailInput.addEventListener("input", () => validateAfterSubmit(validateEmailField));
+clientEmailInput.addEventListener("blur", () => validateAfterSubmit(validateEmailField));
+companyNameInput.addEventListener("input", () => validateAfterSubmit(() => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании.")));
+companyNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании.")));
+customPositionInput.addEventListener("input", () => validateAfterSubmit(validateCustomPositionField));
+customPositionInput.addEventListener("blur", () => validateAfterSubmit(validateCustomPositionField));
+if (addCommentButton) {
+  addCommentButton.addEventListener("click", () => setCommentFieldOpen(true));
+}
 form.addEventListener("submit", submitBooking);
 if (bookingSuccessCloseButton) {
   bookingSuccessCloseButton.addEventListener("click", () => setBookingSuccessModal(false));
-}
-if (bookingSuccessConfirmButton) {
-  bookingSuccessConfirmButton.addEventListener("click", () => setBookingSuccessModal(false));
 }
 if (bookingSuccessBackdrop) {
   bookingSuccessBackdrop.addEventListener("click", () => setBookingSuccessModal(false));
@@ -768,7 +903,15 @@ if (isEmbedded) {
 syncCustomPosition();
 syncPhoneMask();
 setStep("date");
-loadSlots().finally(() => notifyParentHeight());
+if (showSuccessPreview) {
+  setBookingSuccessModal(true);
+}
+loadSlots().finally(() => {
+  if (showSuccessPreview) {
+    setBookingSuccessModal(true);
+  }
+  notifyParentHeight();
+});
 
 window.addEventListener("load", notifyParentHeight);
 window.addEventListener("resize", notifyParentHeight);

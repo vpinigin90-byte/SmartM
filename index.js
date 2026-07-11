@@ -25,6 +25,9 @@ const MAX_PUBLIC_RANGE_DAYS = Number(process.env.MAX_PUBLIC_RANGE_DAYS) || 45;
 const MAX_ADMIN_RANGE_DAYS = Number(process.env.MAX_ADMIN_RANGE_DAYS) || 120;
 const LOGIN_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
 const PUBLIC_RATE_LIMIT = { limit: 60, windowMs: 10 * 60 * 1000 };
+const PUBLIC_BOOKING_IP_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
+const PUBLIC_BOOKING_EMAIL_RATE_LIMIT = { limit: 3, windowMs: 60 * 60 * 1000 };
+const PUBLIC_BOOKING_DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 const MTS_LINK_ALLOWED_HOSTS = new Set(
   String(process.env.MTS_LINK_ALLOWED_HOSTS || "userapi.mts-link.ru")
     .split(",")
@@ -32,6 +35,7 @@ const MTS_LINK_ALLOWED_HOSTS = new Set(
     .filter(Boolean),
 );
 const rateLimitBuckets = new Map();
+const publicBookingDuplicates = new Map();
 const PUBLIC_DEMO_DURATION_MINUTES = 60;
 const PUBLIC_DEMO_GAP_MINUTES = 30;
 const DEFAULT_SLOT_RULES = {
@@ -89,29 +93,29 @@ const ALLOWED_FONT_FAMILIES = new Set([
 ]);
 const DEFAULT_APPEARANCE_SETTINGS = {
   fontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
-  titleFontWeight: 700,
+  titleFontWeight: 800,
   bodyFontWeight: 400,
-  pageBackground: '#f7f7f5',
+  pageBackground: '#000000',
   pageBackgroundImage: "",
-  cardBackground: '#ffffff',
-  desktopContentWidth: 1120,
-  textColor: '#18181b',
-  mutedTextColor: '#71717a',
-  heroBackground: '#ffffff',
-  heroTitleColor: '#18181b',
-  heroLeadColor: '#71717a',
-  heroTitleSize: 38,
-  bodyTextSize: 13,
+  cardBackground: '#15181a',
+  desktopContentWidth: 1180,
+  textColor: '#f4f6f2',
+  mutedTextColor: '#9ba3a6',
+  heroBackground: '#0d0f10',
+  heroTitleColor: '#f4f6f2',
+  heroLeadColor: '#c7ccca',
+  heroTitleSize: 42,
+  bodyTextSize: 14,
   heroTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
-  heroTitleFontWeight: 700,
+  heroTitleFontWeight: 800,
   heroLeadFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   heroLeadFontWeight: 400,
   heroLeadFontSize: 13,
   pickerTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
-  pickerTitleFontWeight: 700,
+  pickerTitleFontWeight: 800,
   pickerTitleFontSize: 20,
   calendarMonthFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
-  calendarMonthFontWeight: 700,
+  calendarMonthFontWeight: 800,
   calendarMonthFontSize: 16,
   calendarWeekdayFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   calendarWeekdayFontWeight: 400,
@@ -119,20 +123,20 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   calendarDateFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   calendarDateFontWeight: 400,
   calendarDateFontSize: 17,
-  panelRadius: 14,
-  dateTextColor: '#18181b',
-  weekdayTextColor: '#9ca3af',
-  dateMutedColor: '#71717a',
-  dateHoverBackground: '#f4f4f2',
-  dateActiveBackground: '#efe9ff',
-  dateActiveTextColor: '#5b3fd8',
+  panelRadius: 18,
+  dateTextColor: '#f4f6f2',
+  weekdayTextColor: '#9ba3a6',
+  dateMutedColor: '#9ba3a6',
+  dateHoverBackground: '#1c2023',
+  dateActiveBackground: '#c9ff14',
+  dateActiveTextColor: '#0b0d0e',
   dateButtonHeight: 54,
-  timeBackground: '#ffffff',
-  timeTextColor: '#18181b',
-  timeBorderColor: '#e4e4e7',
-  timeActiveBackground: '#ecf7f0',
-  timeActiveTextColor: '#14532d',
-  timeActiveBorderColor: '#14532d',
+  timeBackground: '#111415',
+  timeTextColor: '#f4f6f2',
+  timeBorderColor: '#2a3033',
+  timeActiveBackground: '#c9ff14',
+  timeActiveTextColor: '#0b0d0e',
+  timeActiveBorderColor: '#c9ff14',
   timeButtonHeight: 56,
   timeSlotFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   timeSlotFontWeight: 400,
@@ -140,16 +144,16 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   timeMetaFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   timeMetaFontWeight: 400,
   timeMetaFontSize: 14,
-  formGradientStart: '#0b314d',
-  formGradientMid: '#123f5f',
-  formGradientEnd: '#0a2840',
-  formTitleColor: '#f7fbff',
-  formLabelColor: '#f2f8ff',
-  formMutedColor: '#dfeaf7',
-  formInputBackground: '#2d5c86',
-  formInputTextColor: '#f7fbff',
-  formPlaceholderColor: '#bfd0e1',
-  formInputBorderColor: '#a0c0db',
+  formGradientStart: '#0d0f10',
+  formGradientMid: '#15181a',
+  formGradientEnd: '#0c0e0f',
+  formTitleColor: '#f4f6f2',
+  formLabelColor: '#f4f6f2',
+  formMutedColor: '#9ba3a6',
+  formInputBackground: '#0c0e0f',
+  formInputTextColor: '#f4f6f2',
+  formPlaceholderColor: '#7e878a',
+  formInputBorderColor: '#343b3f',
   formInputHeight: 34,
   formTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   formTitleFontWeight: 700,
@@ -166,28 +170,28 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   formConsentFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   formConsentFontWeight: 400,
   formConsentFontSize: 9,
-  primaryButtonBackground: '#ffffff',
-  primaryButtonTextColor: '#0c1c2c',
-  primaryButtonBorderColor: '#081d30',
+  primaryButtonBackground: '#c9ff14',
+  primaryButtonTextColor: '#0b0d0e',
+  primaryButtonBorderColor: '#c9ff14',
   primaryButtonHeight: 38,
   primaryButtonFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   primaryButtonFontWeight: 600,
   primaryButtonFontSize: 13,
-  iconButtonBackground: '#6591b3',
-  iconButtonTextColor: '#f2f8ff',
-  successModalIcon: "",
-  successModalTitle: "Встреча забронирована",
-  successModalMessage: "Встреча создана в календаре, участник добавлен по указанному e-mail.",
+  iconButtonBackground: '#252a2d',
+  iconButtonTextColor: '#c9ff14',
+  successModalIcon: "/calendar-love-02.svg",
+  successModalTitle: "Встреча назначена!",
+  successModalMessage: "Проверьте свой календарь или\u00a0уведомления в\u00a0вашем почтовом ящике.",
   successModalButtonText: "Понятно",
-  successModalBackground: '#ffffff',
-  successModalBackdrop: '#07121e',
-  successModalTitleColor: '#0f172a',
-  successModalTextColor: '#5b6472',
-  successModalIconBackground: '#dff6e7',
-  successModalIconColor: '#166534',
-  successModalButtonBackground: '#ffffff',
-  successModalButtonTextColor: '#0c1c2c',
-  successModalButtonBorderColor: '#081d30',
+  successModalBackground: '#15181a',
+  successModalBackdrop: '#000000',
+  successModalTitleColor: '#f4f6f2',
+  successModalTextColor: '#c7ccca',
+  successModalIconBackground: '#c9ff14',
+  successModalIconColor: '#0b0d0e',
+  successModalButtonBackground: '#c9ff14',
+  successModalButtonTextColor: '#0b0d0e',
+  successModalButtonBorderColor: '#c9ff14',
   successModalTitleFontFamily: 'Inter, "Avenir Next", "Segoe UI", Arial, sans-serif',
   successModalTitleFontWeight: 700,
   successModalTitleFontSize: 24,
@@ -224,6 +228,9 @@ function normalizeAssetValue(value, fallback = "") {
     return nextValue.replace(/\s+/g, "");
   }
   if (/^https?:\/\/\S+$/i.test(nextValue)) {
+    return nextValue;
+  }
+  if (/^\/[A-Za-z0-9/_-]+\.(?:svg|png|jpe?g|webp|gif)$/i.test(nextValue)) {
     return nextValue;
   }
   return fallback;
@@ -819,17 +826,47 @@ function getClientIp(request) {
 }
 
 function checkRateLimit(request, scope, options) {
+  return checkRateLimitForKey(scope, getClientIp(request), options);
+}
+
+function checkRateLimitForKey(scope, key, options) {
   const now = Date.now();
-  const key = `${scope}:${getClientIp(request)}`;
-  const current = rateLimitBuckets.get(key);
+  const bucketKey = `${scope}:${key || "unknown"}`;
+  const current = rateLimitBuckets.get(bucketKey);
 
   if (!current || current.expiresAt <= now) {
-    rateLimitBuckets.set(key, { count: 1, expiresAt: now + options.windowMs });
+    rateLimitBuckets.set(bucketKey, { count: 1, expiresAt: now + options.windowMs });
     return true;
   }
 
   current.count += 1;
   return current.count <= options.limit;
+}
+
+function purgeExpiredMapEntries(map, now = Date.now()) {
+  for (const [key, expiresAt] of map.entries()) {
+    if (expiresAt <= now) {
+      map.delete(key);
+    }
+  }
+}
+
+function assertPublicBookingNotDuplicate(request, booking) {
+  const now = Date.now();
+  purgeExpiredMapEntries(publicBookingDuplicates, now);
+  const ip = getClientIp(request);
+  const email = booking.clientEmail.toLowerCase();
+  const slotKey = `${booking.start}|${booking.end}`;
+  const keys = [
+    `email:${email}:${slotKey}`,
+    `ip:${ip}:${slotKey}`,
+  ];
+
+  if (keys.some((key) => publicBookingDuplicates.has(key))) {
+    throw createHttpError("Duplicate booking", 429);
+  }
+
+  keys.forEach((key) => publicBookingDuplicates.set(key, now + PUBLIC_BOOKING_DUPLICATE_WINDOW_MS));
 }
 
 function createHttpError(message, statusCode = 400) {
@@ -2757,7 +2794,40 @@ function isSlotAllowedByRules(startIso, endIso, rules) {
 }
 
 function isEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  return /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(value);
+}
+
+function hasControlCharacters(value) {
+  return /[\u0000-\u001f\u007f]/.test(String(value || ""));
+}
+
+function assertTextField(value, label, options = {}) {
+  const text = String(value || "").trim();
+  const min = Number(options.min || 0);
+  const max = Number(options.max || 500);
+
+  if (text.length < min || text.length > max || hasControlCharacters(text)) {
+    throw createHttpError(`Invalid ${label}`, 400);
+  }
+}
+
+function assertPhoneField(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 16 || hasControlCharacters(value)) {
+    throw createHttpError("Invalid phone", 400);
+  }
+}
+
+function assertHoneypotIsEmpty(body) {
+  const honeypotValues = [
+    body.website,
+    body.url,
+    body.homepage,
+    body.companySite,
+  ];
+  if (honeypotValues.some((value) => String(value || "").trim())) {
+    throw createHttpError("Spam rejected", 400);
+  }
 }
 
 function normalizeAdditionalAttendees(value, clientEmail) {
@@ -2792,6 +2862,10 @@ function normalizeAdditionalAttendees(value, clientEmail) {
     attendees.push(email);
   }
 
+  if (attendees.length > 10) {
+    throw createHttpError("Too many attendees", 400);
+  }
+
   return attendees;
 }
 
@@ -2807,11 +2881,17 @@ function normalizeBookingPayload(body) {
   const comment = String(body.comment || "").trim();
   const rules = getPublicSlotRules(body);
 
-  if (!clientName || !clientEmail || !clientPhone || !companyName || !position) {
+  if (!clientName || !clientEmail || !clientPhone || !companyName) {
     const error = new Error("Missing client fields");
     error.statusCode = 400;
     throw error;
   }
+
+  assertTextField(clientName, "client name", { min: 2, max: 120 });
+  assertPhoneField(clientPhone);
+  assertTextField(companyName, "company name", { min: 2, max: 160 });
+  assertTextField(position, "position", { max: 120 });
+  assertTextField(comment, "comment", { max: 1500 });
 
   if (!isEmail(clientEmail)) {
     const error = new Error("Invalid client email");
@@ -2969,8 +3049,8 @@ async function createPublicBooking(booking) {
     booking.clientName,
     `Email: ${booking.clientEmail}`,
     `Телефон: ${booking.clientPhone}`,
-    `Компания: ${booking.companyName}`,
-    `Должность: ${booking.position}`,
+    booking.companyName ? `Компания: ${booking.companyName}` : "",
+    booking.position ? `Должность: ${booking.position}` : "",
     booking.additionalAttendees.length
       ? `Дополнительные участники: ${booking.additionalAttendees.join(", ")}`
       : "",
@@ -2995,7 +3075,7 @@ async function createPublicBooking(booking) {
   const eventUrl = buildEventUrl(target.writableCalendar.url, uid);
   const eventIcs = buildEventIcs({
     uid,
-    summary: `Демо Scrolltool для ${booking.companyName}`,
+    summary: `Демо Scrolltool для ${booking.companyName || booking.clientName}`,
     description,
     location: "Онлайн",
     conferenceUrl: mtsLinkSettings.insertLinkIntoLocation ? mtsLinkMeeting?.meetingUrl || "" : "",
@@ -3052,7 +3132,9 @@ function serveFile(filePath, response) {
       ? "text/css; charset=utf-8"
       : filePath.endsWith(".js")
         ? "application/javascript; charset=utf-8"
-        : "text/html; charset=utf-8";
+        : filePath.endsWith(".svg")
+          ? "image/svg+xml; charset=utf-8"
+          : "text/html; charset=utf-8";
 
   return fs
     .readFile(filePath)
@@ -3093,13 +3175,15 @@ function handleCalDavError(response, error, fallbackMessage) {
 
 function handlePublicError(response, error) {
   setPublicCorsHeaders(response);
-  const statusCode = error.statusCode === 400 || error.statusCode === 409 ? error.statusCode : 500;
+  const statusCode = [400, 409, 429].includes(error.statusCode) ? error.statusCode : 500;
   const message =
     statusCode === 400
       ? "Проверьте данные бронирования."
       : statusCode === 409
         ? "Этот слот уже недоступен. Выберите другое время."
-        : "Не удалось выполнить бронирование. Попробуйте позже.";
+        : statusCode === 429
+          ? "Слишком много запросов. Попробуйте позже."
+          : "Не удалось выполнить бронирование. Попробуйте позже.";
 
   return json(response, statusCode, { error: message });
 }
@@ -3197,11 +3281,17 @@ async function handleApi(request, requestUrl, response) {
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/public/bookings") {
-    if (!checkRateLimit(request, "public-bookings", PUBLIC_RATE_LIMIT)) {
+    if (!checkRateLimit(request, "public-bookings", PUBLIC_BOOKING_IP_RATE_LIMIT)) {
       return json(response, 429, { error: "Слишком много запросов. Попробуйте позже." });
     }
     try {
-      const booking = normalizeBookingPayload(await readRequestBody(request));
+      const body = await readRequestBody(request);
+      assertHoneypotIsEmpty(body);
+      const booking = normalizeBookingPayload(body);
+      if (!checkRateLimitForKey("public-bookings-email", booking.clientEmail.toLowerCase(), PUBLIC_BOOKING_EMAIL_RATE_LIMIT)) {
+        throw createHttpError("Too many booking attempts for email", 429);
+      }
+      assertPublicBookingNotDuplicate(request, booking);
       const result = await createPublicBooking(booking);
       return json(response, 201, result);
     } catch (error) {

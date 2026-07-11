@@ -76,6 +76,10 @@ function getActiveEmployee() {
 }
 
 function switchTab(tabName) {
+  if (!tabButtons.some((button) => button.dataset.tab === tabName && !button.hidden)) {
+    tabName = "employees";
+  }
+  setStatus("", "");
   tabButtons.forEach((button) => {
     const isActive = button.dataset.tab === tabName;
     button.classList.toggle("active", isActive);

@@ -54,10 +54,15 @@ const eventLocationInput = document.querySelector("#event-location");
 const eventDescriptionInput = document.querySelector("#event-description");
 const embedCodeInput = document.querySelector("#embed-code");
 const copyEmbedCodeButton = document.querySelector("#copy-embed-code-button");
+const refreshEmbedCodeButton = document.querySelector("#refresh-embed-code-button");
 const tabButtons = [...document.querySelectorAll(".tab-button")];
 const tabPanels = [...document.querySelectorAll("[data-tab-panel]")];
 
-const EMBED_CODE = String.raw`<div class="scrolltool-booking-embed">
+let embedCodeVersion = Date.now();
+
+function buildEmbedCode(version = embedCodeVersion) {
+  const versionParam = version ? `&v=${encodeURIComponent(version)}` : "";
+  return String.raw`<div class="scrolltool-booking-embed">
   <style>
     .scrolltool-booking-embed {
       width: 100%;
@@ -88,7 +93,7 @@ const EMBED_CODE = String.raw`<div class="scrolltool-booking-embed">
 
   <iframe
     id="scrolltool-booking-frame"
-    src="https://meet.scroll-tool.ru/booking?embed=1"
+    src="https://meet.scroll-tool.ru/booking?embed=1${versionParam}"
     title="Выбор времени для встречи Scrolltool"
     loading="lazy"
     allow="clipboard-write"
@@ -119,6 +124,7 @@ const EMBED_CODE = String.raw`<div class="scrolltool-booking-embed">
     })();
   </script>
 </div>`;
+}
 
 const state = {
   employees: [],
@@ -165,7 +171,30 @@ function setAdminVisible(visible) {
 
 function renderEmbedCode() {
   if (embedCodeInput) {
-    embedCodeInput.value = EMBED_CODE;
+    embedCodeInput.value = buildEmbedCode();
+  }
+}
+
+async function refreshEmbedCode() {
+  if (!embedCodeInput || !refreshEmbedCodeButton) {
+    return;
+  }
+
+  refreshEmbedCodeButton.disabled = true;
+  setStatus("Обновляю код для сайта...", "");
+  try {
+    await Promise.all([
+      loadEmployees(),
+      loadMeetingRules(),
+      typeof window.refreshMtsLinkAdmin === "function" ? window.refreshMtsLinkAdmin() : Promise.resolve(),
+    ]);
+    embedCodeVersion = Date.now();
+    renderEmbedCode();
+    setStatus("Код для сайта обновлён.", "success");
+  } catch (error) {
+    setStatus(error.message || "Не удалось обновить код для сайта.", "error");
+  } finally {
+    refreshEmbedCodeButton.disabled = false;
   }
 }
 
@@ -193,6 +222,10 @@ function getActiveEmployee() {
 }
 
 function switchTab(tabName) {
+  if (!tabButtons.some((button) => button.dataset.tab === tabName && !button.hidden)) {
+    tabName = "employees";
+  }
+  setStatus("", "");
   tabButtons.forEach((button) => {
     const isActive = button.dataset.tab === tabName;
     button.classList.toggle("active", isActive);
@@ -904,6 +937,7 @@ credentialsForm.addEventListener("submit", async (event) => {
 loginForm.addEventListener("submit", loginAdmin);
 logoutButton.addEventListener("click", logoutAdmin);
 copyEmbedCodeButton.addEventListener("click", copyEmbedCode);
+refreshEmbedCodeButton.addEventListener("click", refreshEmbedCode);
 checkButton.addEventListener("click", checkSlots);
 reloadCalendarsButton.addEventListener("click", loadCalendars);
 loadEventsButton.addEventListener("click", loadEvents);
