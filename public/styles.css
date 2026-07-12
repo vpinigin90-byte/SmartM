@@ -209,7 +209,7 @@ select {
 
 body.booking-page.embedded-booking {
   min-height: 0;
-  background: transparent;
+  background: #000000;
 }
 
 body.booking-page.embedded-booking .booking-shell {

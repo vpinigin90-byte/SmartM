@@ -67,6 +67,9 @@ function buildEmbedCode(version = embedCodeVersion) {
     .scrolltool-booking-embed {
       width: 100%;
       margin: 24px 0;
+      background: #000000;
+      color-scheme: dark;
+      isolation: isolate;
     }
 
     .scrolltool-booking-embed iframe {
@@ -75,8 +78,11 @@ function buildEmbedCode(version = embedCodeVersion) {
       height: 960px;
       border: 0;
       border-radius: 20px;
-      background: #ffffff;
-      box-shadow: 0 18px 48px rgba(24, 24, 27, 0.08);
+      background: #000000;
+      box-shadow: none;
+      opacity: 1 !important;
+      filter: none !important;
+      mix-blend-mode: normal !important;
       overflow: hidden;
     }
 
