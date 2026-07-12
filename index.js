@@ -1719,7 +1719,8 @@ function buildMeetingSlotsFromBusy(busyIntervals, rangeStartIso, rangeEndIso, du
   const rangeStart = new Date(rangeStartIso).getTime();
   const rangeEnd = new Date(rangeEndIso).getTime();
   const durationMs = durationMinutes * 60 * 1000;
-  const stepMs = (durationMinutes + gapMinutes) * 60 * 1000;
+  const gapMs = Math.max(0, Number(gapMinutes) || 0) * 60 * 1000;
+  const stepMs = durationMs + gapMs;
   const slots = [];
   let cursor = rangeStart;
 
@@ -1740,7 +1741,8 @@ function buildMeetingSlotsFromBusy(busyIntervals, rangeStartIso, rangeEndIso, du
       }
     }
 
-    cursor = Math.max(cursor, busyEnd);
+    // Keep the same pause after a calendar event as between suggested meetings.
+    cursor = Math.max(cursor, busyEnd + gapMs);
   }
 
   if (cursor < rangeEnd) {
