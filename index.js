@@ -1762,7 +1762,7 @@ function buildMeetingSlotsFromBusy(busyIntervals, rangeStartIso, rangeEndIso, du
 function getDateTimePartsInTimeZone(isoString, timeZone) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: timeZone || "UTC",
-    hour12: false,
+    hourCycle: "h23",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -1770,12 +1770,20 @@ function getDateTimePartsInTimeZone(isoString, timeZone) {
     minute: "2-digit",
   });
 
-  return Object.fromEntries(
+  const parts = Object.fromEntries(
     formatter
       .formatToParts(new Date(isoString))
       .filter((part) => part.type !== "literal")
       .map((part) => [part.type, part.value]),
   );
+
+  // Some ICU builds format midnight as 24:00 even with a 24-hour clock.
+  // Normalize it before comparing a slot with the configured daily bounds.
+  if (parts.hour === "24") {
+    parts.hour = "00";
+  }
+
+  return parts;
 }
 
 function parseTimeToMinutes(value, fallback) {
@@ -1816,6 +1824,10 @@ function filterMeetingSlotsByRules(slots, rules = {}) {
     const weekday = new Date(`${localDate}T00:00:00.000Z`).getUTCDay();
 
     if (endLocalDate !== localDate) {
+      return false;
+    }
+
+    if (startMinutes >= endMinutes) {
       return false;
     }
 
