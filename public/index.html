@@ -92,7 +92,7 @@
                 <div>
                   <h2 id="employee-panel-title">Новый сотрудник</h2>
                   <p class="summary">
-                    Тот же интерфейс для ввода почты, пароля и проверки доступности.
+                    Введите данные сотрудника для подключения к календарю Mail.ru и проверки доступных окон для записи.
                   </p>
                 </div>
                 <button id="close-employee-modal" class="ghost-button admin-modal-close" type="button" aria-label="Закрыть">
@@ -134,7 +134,7 @@
                   </div>
                 </label>
 
-                <div class="actions">
+                <div class="actions employee-modal-actions">
                   <button id="save-button" class="primary-button" type="submit">
                     Сохранить сотрудника
                   </button>
@@ -145,6 +145,7 @@
                     Обновить календари
                   </button>
                 </div>
+                <p id="employee-action-status" class="status employee-action-status" role="status" aria-live="polite"></p>
               </form>
             </section>
           </div>

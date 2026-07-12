@@ -27,6 +27,7 @@ const addEmployeeButton = document.querySelector("#add-employee-button");
 const employeeModal = document.querySelector("#employee-modal");
 const closeEmployeeModalButton = document.querySelector("#close-employee-modal");
 const employeeModalBackdrop = document.querySelector("[data-close-employee-modal]");
+const employeeActionStatusNode = document.querySelector("#employee-action-status");
 const toggleEventFormButton = document.querySelector("#toggle-event-form-button");
 const meetingEmployeeASelect = document.querySelector("#meeting-employee-a");
 const meetingEmployeeBSelect = document.querySelector("#meeting-employee-b");
@@ -168,6 +169,14 @@ function setStatus(message, kind = "") {
 function setLoginStatus(message, kind = "") {
   loginStatusNode.textContent = message;
   loginStatusNode.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function setEmployeeActionStatus(message, kind = "") {
+  if (!employeeActionStatusNode) {
+    return;
+  }
+  employeeActionStatusNode.textContent = message;
+  employeeActionStatusNode.className = `status employee-action-status${kind ? ` ${kind}` : ""}`;
 }
 
 function setAdminVisible(visible) {
@@ -559,6 +568,7 @@ function renderSlots(result, rangeStart, rangeEnd) {
 
   slotsNode.classList.remove("empty");
   slotsNode.innerHTML = html;
+  return days;
 }
 
 function renderCalendars() {
@@ -714,6 +724,7 @@ async function loadMeetingRules() {
 
 async function saveEmployee() {
   setStatus("Сохраняю сотрудника...", "");
+  setEmployeeActionStatus("", "");
   saveButton.disabled = true;
 
   try {
@@ -777,13 +788,20 @@ async function deleteEmployee(employeeId) {
 
 async function loadCalendars() {
   reloadCalendarsButton.disabled = true;
+  setEmployeeActionStatus("Обновляю список календарей Mail.ru...", "");
   try {
     const payload = await apiRequest("/api/calendars");
     state.calendars = payload.calendars || [];
     renderCalendars();
+    const writableCount = state.calendars.filter((calendar) => calendar.canWrite !== false).length;
+    const message = state.calendars.length
+      ? `Календари успешно обновлены: найдено ${state.calendars.length}, доступно для записи ${writableCount}.`
+      : "Подключение выполнено, но календарей не найдено. Проверьте, что у аккаунта Mail.ru есть календарь.";
     setStatus(`Календари обновлены: ${state.calendars.length}.`, "success");
+    setEmployeeActionStatus(message, state.calendars.length ? "success" : "error");
   } catch (error) {
     setStatus(error.message, "error");
+    setEmployeeActionStatus(error.message || "Не удалось обновить календари.", "error");
   } finally {
     reloadCalendarsButton.disabled = false;
   }
@@ -849,6 +867,7 @@ async function checkSlots() {
   rangeEnd.setDate(rangeEnd.getDate() + 14);
 
   setStatus("Проверяю календари Mail.ru по CalDAV...", "");
+  setEmployeeActionStatus("Проверяю доступные окна на ближайшие 14 дней...", "");
   checkButton.disabled = true;
 
   try {
@@ -863,11 +882,18 @@ async function checkSlots() {
       }),
     });
 
-    renderSlots(payload, rangeStart, rangeEnd);
-    switchTab("calendar");
+    const days = renderSlots(payload, rangeStart, rangeEnd);
+    const freeCount = days.reduce((sum, day) => sum + day.free.length, 0);
+    const calendarsCount = Number(payload.calendars?.length || 0);
+    const eventsCount = Number(payload.events?.length || 0);
+    const message = freeCount
+      ? `Проверка прошла успешно: календарей ${calendarsCount}, событий ${eventsCount}, найдено свободных окон ${freeCount}.`
+      : `Проверка прошла успешно: календарей ${calendarsCount}, событий ${eventsCount}, но свободных окон в выбранном диапазоне нет.`;
     setStatus("Слоты обновлены.", "success");
+    setEmployeeActionStatus(message, "success");
   } catch (error) {
     setStatus(error.message, "error");
+    setEmployeeActionStatus(error.message || "Не удалось проверить доступные слоты.", "error");
   } finally {
     checkButton.disabled = false;
   }

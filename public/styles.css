@@ -1344,6 +1344,23 @@ body.modal-open {
   margin: 8px 0 0;
 }
 
+.employee-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+
+.employee-modal-actions button {
+  width: 100%;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.employee-action-status {
+  margin: 4px 0 0;
+}
+
 .admin-modal-close {
   min-height: 36px;
   padding: 8px 12px;
