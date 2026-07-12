@@ -4,6 +4,7 @@
   const connectionStatusNode = document.querySelector("#mts-link-connection-status");
   const createStatusNode = document.querySelector("#mts-link-create-status");
   const lastSuccessNode = document.querySelector("#mts-link-last-success");
+  const failurePreviewNode = document.querySelector("#mts-link-error-preview-message");
   const testButton = document.querySelector("#test-mts-link-button");
 
   if (!form || !tabButton) {
@@ -53,7 +54,6 @@
     appendMeetingMetaToDescription: document.querySelector("#mts-link-append-meta"),
     fallbackWithoutLink: document.querySelector("#mts-link-fallback-without-link"),
     failureWarningText: document.querySelector("#mts-link-failure-warning"),
-    requestTimeoutMs: document.querySelector("#mts-link-timeout"),
   };
 
   let hasLoaded = false;
@@ -81,6 +81,7 @@
     });
     renderStatuses(normalized);
     renderLastSuccess(normalized.lastSuccessMeeting);
+    renderFailurePreview(normalized);
   }
 
   function collectSettings() {
@@ -102,7 +103,7 @@
         : false,
       fallbackWithoutLink: fields.fallbackWithoutLink.checked,
       failureWarningText: fields.failureWarningText.value.trim(),
-      requestTimeoutMs: Number(fields.requestTimeoutMs.value) || DEFAULT_SETTINGS.requestTimeoutMs,
+      requestTimeoutMs: DEFAULT_SETTINGS.requestTimeoutMs,
     });
   }
 
@@ -152,9 +153,16 @@
       <p><strong>EventSession ID:</strong> ${escapeHtml(lastSuccessMeeting.eventSessionId || "—")}</p>
       <p><strong>Registrant ID:</strong> ${escapeHtml(lastSuccessMeeting.registrantId || "—")}</p>
       <p><strong>Ссылка:</strong> ${lastSuccessMeeting.meetingUrl ? `<a href="${escapeHtml(lastSuccessMeeting.meetingUrl)}" target="_blank" rel="noreferrer">${escapeHtml(lastSuccessMeeting.meetingUrl)}</a>` : "—"}</p>
-      <p><strong>HTTP статус session:</strong> ${escapeHtml(lastSuccessMeeting.rawStatus || "—")}</p>
-      <p><strong>HTTP статус register:</strong> ${escapeHtml(lastSuccessMeeting.registerStatus || "—")}</p>
+      <p><strong>Сессия встречи создана:</strong> ${lastSuccessMeeting.rawStatus === 201 ? "да" : "проверьте статус"}</p>
+      <p><strong>Ссылка участника создана:</strong> ${lastSuccessMeeting.registerStatus === 201 ? "да" : "проверьте статус"}</p>
     `;
+  }
+
+  function renderFailurePreview(settings) {
+    if (!failurePreviewNode) return;
+    failurePreviewNode.textContent = settings.fallbackWithoutLink
+      ? settings.failureWarningText || "MTS Link недоступен. Встреча будет создана без ссылки на звонок."
+      : "MTS Link недоступен. Встреча не будет назначена до восстановления интеграции.";
   }
 
   async function loadSettings(force = false) {
@@ -210,6 +218,8 @@
   }
 
   form.addEventListener("submit", saveSettings);
+  fields.fallbackWithoutLink?.addEventListener("change", () => renderFailurePreview(collectSettings()));
+  fields.failureWarningText?.addEventListener("input", () => renderFailurePreview(collectSettings()));
   testButton?.addEventListener("click", testConnection);
   tabButton.addEventListener("click", () => loadSettings().catch((error) => setStatus(error.message, "error")));
 

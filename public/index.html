@@ -46,6 +46,7 @@
             </div>
           </div>
           <div class="header-actions" aria-label="Интеграции">
+            <button id="meeting-registry-button" class="secondary-button" type="button">Реестр встреч</button>
             <button id="logout-button" class="ghost-button" type="button">Выйти</button>
           </div>
         </header>
@@ -54,6 +55,7 @@
           <button class="tab-button active" type="button" role="tab" aria-selected="true" data-tab="employees">Сотрудники</button>
           <button class="tab-button hidden-panel" type="button" role="tab" aria-selected="false" data-tab="calendar" hidden>Проверка событий</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="client-meeting">Настройки доступности</button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="meeting-files">Файлы ко встрече</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="mts-link">MTS Link</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="embed">HTML/Виджет</button>
         </div>
@@ -345,6 +347,51 @@
           </section>
         </section>
 
+        <section class="tab-panel" role="tabpanel" data-tab-panel="meeting-files">
+          <section class="panel">
+            <div class="results-head">
+              <div>
+                <h2>Файлы ко встрече</h2>
+                <p class="summary full-width-summary">Ссылки на эти файлы будут добавляться в каждое новое календарное приглашение.</p>
+              </div>
+              <label class="primary-button file-upload-button">
+                <input id="meeting-files-upload" type="file" hidden />
+                <span>Добавить файл</span>
+              </label>
+            </div>
+            <p id="meeting-files-status" class="status" aria-live="polite"></p>
+            <div class="meeting-files-table-wrap">
+              <table class="meeting-files-table">
+                <thead><tr><th>Файл</th><th>Размер</th><th>Действия</th></tr></thead>
+                <tbody id="meeting-files-list"><tr><td colspan="3">Файлы ещё не добавлены.</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="tab-panel" role="tabpanel" data-tab-panel="meeting-registry">
+          <section class="panel">
+            <div class="results-head">
+              <div>
+                <h2>Реестр встреч</h2>
+                <p class="summary full-width-summary">Данные из календаря за 30 дней назад и 90 дней вперёд. Удалённые события обновляются при открытии реестра.</p>
+              </div>
+              <button id="refresh-meeting-registry-button" class="secondary-button" type="button">Обновить</button>
+            </div>
+            <p id="meeting-registry-status" class="status" aria-live="polite"></p>
+            <div class="registry-sections" role="tablist" aria-label="Состояние встреч">
+              <button class="secondary-button active" type="button" data-registry-filter="active">Актуальные <span id="meeting-registry-active-count" class="registry-count">0</span></button>
+              <button class="secondary-button" type="button" data-registry-filter="deleted">Удалённые <span id="meeting-registry-deleted-count" class="registry-count">0</span></button>
+            </div>
+            <div class="meeting-files-table-wrap">
+              <table class="meeting-files-table registry-table">
+                <thead><tr><th>Дата и время</th><th>Встреча</th><th>Источник</th><th>Роль</th><th>Участники</th></tr></thead>
+                <tbody id="meeting-registry-list"><tr><td colspan="5">Откройте реестр, чтобы загрузить встречи.</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
 
         <section class="tab-panel" role="tabpanel" data-tab-panel="mts-link">
           <section class="panel integration-layout">
@@ -452,7 +499,7 @@
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Поведение при ошибке</h3>
-                    <p class="appearance-hint">Настройка fallback и текста предупреждения в серверном логе.</p>
+                    <p class="appearance-hint">Определяет, как сервис поступит, если MTS Link временно недоступен.</p>
                   </div>
                   <div class="appearance-grid">
                     <label class="field compact-field switch-field">
@@ -460,15 +507,14 @@
                       <span class="switch-control" aria-hidden="true"></span>
                       <span class="switch-field-label">Создавать бронь без ссылки</span>
                     </label>
-                    <label class="field compact-field">
-                      <span>Таймаут запроса, мс</span>
-                      <input id="mts-link-timeout" type="number" min="1000" max="60000" step="500" placeholder="Таймаут запроса к MTS Link, мс" aria-label="Таймаут запроса к MTS Link в миллисекундах" />
-                    </label>
                   </div>
                   <label class="field">
-                    <span>Текст предупреждения для админского лога</span>
-                    <input id="mts-link-failure-warning" type="text" placeholder="Текст предупреждения, если MTS Link недоступен, например бронь создана без ссылки" aria-label="Текст предупреждения для админского лога" />
+                    <input id="mts-link-failure-warning" type="text" placeholder="Текст статуса, если MTS Link недоступен" aria-label="Текст статуса при ошибке MTS Link" />
                   </label>
+                  <div class="mts-link-error-preview" aria-live="polite">
+                    <span>Предпросмотр статуса</span>
+                    <p id="mts-link-error-preview-message"></p>
+                  </div>
                 </section>
 
                 <section class="appearance-group">
@@ -484,7 +530,7 @@
                 <section class="appearance-group">
                   <div class="appearance-group-head">
                     <h3>Последняя успешно созданная встреча</h3>
-                    <p class="appearance-hint">Read-only сведения о последней встрече, для которой удалось получить итоговую ссылку участника.</p>
+                    <p class="appearance-hint">Служебные сведения о последней встрече, для которой была получена ссылка участника.</p>
                   </div>
                   <div id="mts-link-last-success" class="rules-preview integration-reference">
                     <p>Пока успешных встреч через MTS Link не было.</p>
@@ -524,5 +570,7 @@
 
     <script src="/admin.js"></script>
     <script src="/admin-integrations.js"></script>
+    <script src="/admin-meeting-files.js"></script>
+    <script src="/admin-meeting-registry.js"></script>
   </body>
 </html>

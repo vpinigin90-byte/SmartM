@@ -13,6 +13,8 @@ const MAIL_RU_CALDAV_URLS = [
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const CONFIG_PATH = path.join(DATA_DIR, "smartm-config.json");
+const MEETING_FILES_DIR = path.join(DATA_DIR, "meeting-files");
+const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || "https://meet.scroll-tool.ru").replace(/\/+$/, "");
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === "production" ? "" : "Zz123456");
 const SESSION_COOKIE = "smartm_admin";
@@ -21,6 +23,8 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const CSRF_HEADER = "x-csrf-token";
 const MASKED_SECRET = "********";
 const MAX_JSON_BODY_BYTES = Number(process.env.MAX_JSON_BODY_BYTES) || 1024 * 1024;
+const MAX_MEETING_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_MEETING_FILES = 10;
 const MAX_PUBLIC_RANGE_DAYS = Number(process.env.MAX_PUBLIC_RANGE_DAYS) || 45;
 const MAX_ADMIN_RANGE_DAYS = Number(process.env.MAX_ADMIN_RANGE_DAYS) || 120;
 const LOGIN_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
@@ -704,12 +708,7 @@ function normalizeMtsLinkSettings(source = {}) {
     failureWarningText: String(
       source.failureWarningText || DEFAULT_MTS_LINK_SETTINGS.failureWarningText,
     ).trim(),
-    requestTimeoutMs: normalizeSizeValue(
-      source.requestTimeoutMs,
-      DEFAULT_MTS_LINK_SETTINGS.requestTimeoutMs,
-      1000,
-      60000,
-    ),
+    requestTimeoutMs: DEFAULT_MTS_LINK_SETTINGS.requestTimeoutMs,
     lastConnectionTestAt:
       String(source.lastConnectionTestAt || source.lastTestAt || "").trim() || null,
     lastConnectionTestStatus:
@@ -728,6 +727,44 @@ function normalizeMtsLinkSettings(source = {}) {
     lastCreateTestMessage: String(source.lastCreateTestMessage || "").trim(),
     lastSuccessMeeting,
   };
+}
+
+function normalizeMeetingFiles(source = []) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((file) => ({
+      id: String(file?.id || "").trim(),
+      name: String(file?.name || "").trim().replace(/[\\/\u0000-\u001f]/g, " ").slice(0, 180),
+      size: Math.max(0, Number(file?.size) || 0),
+      mimeType: String(file?.mimeType || "application/octet-stream").trim().slice(0, 120),
+      storedName: String(file?.storedName || "").trim(),
+      createdAt: String(file?.createdAt || "").trim() || null,
+    }))
+    .filter((file) => /^[a-zA-Z0-9_-]{16,80}$/.test(file.id) && file.name && file.size > 0 && file.size <= MAX_MEETING_FILE_BYTES && /^[a-zA-Z0-9_-]{16,80}$/.test(file.storedName))
+    .slice(0, MAX_MEETING_FILES);
+}
+
+function normalizeMeetingRegistry(source = []) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((entry) => ({
+      id: String(entry?.id || "").trim(),
+      eventUrl: String(entry?.eventUrl || "").trim() || null,
+      calendarUrl: String(entry?.calendarUrl || "").trim() || null,
+      uid: String(entry?.uid || "").trim() || null,
+      title: String(entry?.title || "").trim().slice(0, 300) || "Встреча без названия",
+      start: String(entry?.start || "").trim(),
+      end: String(entry?.end || "").trim(),
+      source: entry?.source === "api" ? "api" : "calendar",
+      participation: ["organizer", "invitee", "unknown"].includes(entry?.participation) ? entry.participation : "unknown",
+      attendees: Array.isArray(entry?.attendees) ? entry.attendees.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 30) : [],
+      status: entry?.status === "deleted" ? "deleted" : "active",
+      lastSeenAt: String(entry?.lastSeenAt || "").trim() || null,
+      deletedAt: String(entry?.deletedAt || "").trim() || null,
+      mtsLink: entry?.mtsLink && typeof entry.mtsLink === "object" ? { eventId: String(entry.mtsLink.eventId || "").trim() || null, eventSessionId: String(entry.mtsLink.eventSessionId || "").trim() || null } : null,
+    }))
+    .filter((entry) => entry.id && entry.start && entry.end)
+    .slice(-500);
 }
 
 function normalizeConfig(config = {}) {
@@ -767,6 +804,8 @@ function normalizeConfig(config = {}) {
     meetingRules: normalizeMeetingRules(config.meetingRules || {}),
     appearance: normalizeAppearance(config.appearance || {}),
     mtsLink: normalizeMtsLinkSettings(config.mtsLink || {}),
+    meetingFiles: normalizeMeetingFiles(config.meetingFiles),
+    meetingRegistry: normalizeMeetingRegistry(config.meetingRegistry),
   };
 }
 
@@ -1367,6 +1406,8 @@ function parseCalendarData(calendarData, calendarName, calendarUrl, metadata = {
       summary: properties.SUMMARY?.[0]?.value || "Busy",
       description: properties.DESCRIPTION?.[0]?.value || "",
       location: properties.LOCATION?.[0]?.value || "",
+      organizer: properties.ORGANIZER?.[0]?.value?.replace(/^mailto:/i, "") || "",
+      attendees: (properties.ATTENDEE || []).map((entry) => String(entry.value || "").replace(/^mailto:/i, "")).filter(Boolean),
       start: start.iso,
       end: end.iso,
       isAllDay: start.isDateOnly,
@@ -1652,6 +1693,18 @@ function buildEventIcs(eventData) {
     lines.push(`CONFERENCE;VALUE=URI;FEATURE=VIDEO:${conferenceUrl}`);
   }
 
+  if (Array.isArray(eventData.attachments)) {
+    for (const attachment of eventData.attachments) {
+      const url = String(attachment?.url || "").replace(/[\r\n]/g, "").trim();
+      if (!/^https:\/\//i.test(url)) {
+        continue;
+      }
+      const fileName = escapeIcsParam(attachment.name || "file");
+      const mimeType = escapeIcsParam(attachment.mimeType || "application/octet-stream");
+      lines.push(`ATTACH;FMTTYPE=${mimeType};FILENAME="${fileName}":${url}`);
+    }
+  }
+
   if (Array.isArray(eventData.attendees)) {
     for (const attendee of eventData.attendees) {
       const email = String(attendee.email || "").trim();
@@ -1882,13 +1935,13 @@ async function updateConfig(mutator) {
   return nextConfig;
 }
 
-async function readRequestBody(request) {
+async function readRequestBody(request, maxBytes = MAX_JSON_BODY_BYTES) {
   const chunks = [];
   let totalBytes = 0;
 
   for await (const chunk of request) {
     totalBytes += chunk.length;
-    if (totalBytes > MAX_JSON_BODY_BYTES) {
+    if (totalBytes > maxBytes) {
       throw createHttpError("Размер запроса слишком большой.", 413);
     }
     chunks.push(chunk);
@@ -1899,6 +1952,44 @@ async function readRequestBody(request) {
   }
 
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function getMeetingFileDownloadUrl(file) {
+  return `${PUBLIC_BASE_URL}/api/public/meeting-files/${encodeURIComponent(file.id)}/${encodeURIComponent(file.name)}`;
+}
+
+function decodeMeetingFilePayload(body) {
+  const name = String(body.name || "").trim().replace(/[\\/\u0000-\u001f]/g, " ").slice(0, 180);
+  const mimeType = String(body.mimeType || "application/octet-stream").trim().slice(0, 120) || "application/octet-stream";
+  const base64 = String(body.contentBase64 || "").replace(/^data:[^;]+;base64,/, "").trim();
+
+  if (!name || !base64 || !/^[A-Za-z0-9+/=]+$/.test(base64)) {
+    throw createHttpError("Unable to read meeting file", 400);
+  }
+
+  const content = Buffer.from(base64, "base64");
+  if (!content.length || content.length > MAX_MEETING_FILE_BYTES) {
+    throw createHttpError("Meeting file is too large", 413);
+  }
+
+  return { name, mimeType, content };
+}
+
+async function saveMeetingFile(body, replacedFile = null) {
+  const payload = decodeMeetingFilePayload(body);
+  const id = replacedFile?.id || crypto.randomBytes(18).toString("base64url");
+  const storedName = replacedFile?.storedName || id;
+  await fs.mkdir(MEETING_FILES_DIR, { recursive: true });
+  await fs.writeFile(path.join(MEETING_FILES_DIR, storedName), payload.content);
+
+  return {
+    id,
+    name: payload.name,
+    size: payload.content.length,
+    mimeType: payload.mimeType,
+    storedName,
+    createdAt: replacedFile?.createdAt || new Date().toISOString(),
+  };
 }
 
 async function getCredentials(overrides = {}) {
@@ -3013,6 +3104,66 @@ async function findEmployeeForBooking(startIso, endIso, rules = {}) {
   return null;
 }
 
+function getRegistryEntryId(event) {
+  return crypto.createHash("sha256").update(`${event.calendarUrl || ""}|${event.eventUrl || ""}|${event.uid || ""}|${event.start}`).digest("base64url");
+}
+
+function mapCalendarEventToRegistry(event, employeeEmail, previousEntry = null) {
+  const email = String(employeeEmail || "").toLowerCase();
+  const organizer = String(event.organizer || "").toLowerCase();
+  const attendees = Array.isArray(event.attendees) ? event.attendees : [];
+  const participation = organizer === email ? "organizer" : attendees.some((item) => String(item).toLowerCase() === email) ? "invitee" : "unknown";
+  const source = previousEntry?.source === "api" || String(event.description || "").includes("Заявка на демо:") ? "api" : "calendar";
+  return {
+    id: getRegistryEntryId(event),
+    eventUrl: event.eventUrl || null,
+    calendarUrl: event.calendarUrl || null,
+    uid: event.uid || null,
+    title: event.summary || "Встреча без названия",
+    start: event.start,
+    end: event.end,
+    source,
+    participation,
+    attendees,
+    status: "active",
+    lastSeenAt: new Date().toISOString(),
+    deletedAt: null,
+    mtsLink: previousEntry?.mtsLink || null,
+  };
+}
+
+async function syncMeetingRegistry(config) {
+  const employee = getActiveEmployee(config);
+  if (!employee?.email || !employee?.password) {
+    return { config, registry: config.meetingRegistry || [], syncError: "Не выбран сотрудник с подключённым календарём." };
+  }
+  const rangeStart = new Date();
+  rangeStart.setDate(rangeStart.getDate() - 30);
+  const rangeEnd = new Date();
+  rangeEnd.setDate(rangeEnd.getDate() + 90);
+  let result;
+  try {
+    result = await fetchEventsAcrossCalendars(employee.email, employee.password, rangeStart.toISOString(), rangeEnd.toISOString());
+  } catch {
+    return { config, registry: config.meetingRegistry || [], syncError: "Не удалось обновить данные из календаря Mail.ru." };
+  }
+  const previousById = new Map((config.meetingRegistry || []).map((entry) => [entry.id, entry]));
+  const seenIds = new Set();
+  const activeEntries = result.events.map((event) => {
+    const id = getRegistryEntryId(event);
+    seenIds.add(id);
+    return mapCalendarEventToRegistry(event, employee.email, previousById.get(id));
+  });
+  const deletedEntries = (config.meetingRegistry || []).filter((entry) => {
+    const inRange = new Date(entry.start) >= rangeStart && new Date(entry.start) <= rangeEnd;
+    return entry.status === "deleted" || (inRange && !seenIds.has(entry.id));
+  }).map((entry) => ({ ...entry, status: "deleted", deletedAt: entry.deletedAt || new Date().toISOString() }));
+  const registry = [...activeEntries, ...deletedEntries].sort((left, right) => new Date(right.start) - new Date(left.start)).slice(0, 500);
+  const nextConfig = { ...config, meetingRegistry: registry };
+  await saveConfig(nextConfig);
+  return { config: nextConfig, registry, syncError: null };
+}
+
 async function createPublicBooking(booking) {
   const config = await loadConfig();
   const target = await findEmployeeForBooking(booking.start, booking.end, booking.rules);
@@ -3084,6 +3235,15 @@ async function createPublicBooking(booking) {
     }
   }
 
+  const attachments = config.meetingFiles.map((file) => ({
+    ...file,
+    url: getMeetingFileDownloadUrl(file),
+  }));
+  if (attachments.length) {
+    descriptionSections.push("Материалы к встрече:");
+    attachments.forEach((file) => descriptionSections.push(`${file.name}: ${file.url}`));
+  }
+
   const uid = crypto.randomUUID();
   const description = descriptionSections.filter(Boolean).join("\n");
   const eventUrl = buildEventUrl(target.writableCalendar.url, uid);
@@ -3095,6 +3255,7 @@ async function createPublicBooking(booking) {
     conferenceUrl: mtsLinkSettings.insertLinkIntoLocation ? mtsLinkMeeting?.meetingUrl || "" : "",
     start: booking.start,
     end: booking.end,
+    attachments,
     attendees: [
       {
         name: booking.clientName,
@@ -3109,6 +3270,24 @@ async function createPublicBooking(booking) {
 
   await putCalendarObject(target.employee.email, target.employee.password, eventUrl, eventIcs, {
     ifNoneMatch: true,
+  });
+
+  const registryEvent = {
+    calendarUrl: target.writableCalendar.url,
+    eventUrl,
+    uid,
+    summary: `Демо Scrolltool для ${booking.companyName || booking.clientName}`,
+    start: booking.start,
+    end: booking.end,
+    organizer: target.employee.email,
+    attendees: [booking.clientEmail, ...booking.additionalAttendees],
+    description,
+  };
+  await updateConfig((currentConfig) => {
+    const entry = mapCalendarEventToRegistry(registryEvent, target.employee.email);
+    entry.source = "api";
+    entry.mtsLink = mtsLinkMeeting ? { eventId: mtsLinkMeeting.eventId, eventSessionId: mtsLinkMeeting.eventSessionId } : null;
+    return { ...currentConfig, meetingRegistry: [...currentConfig.meetingRegistry.filter((item) => item.id !== entry.id), entry] };
   });
 
   return {
@@ -3210,6 +3389,32 @@ async function handleApi(request, requestUrl, response) {
       response.end();
       return;
     }
+  }
+
+  const publicMeetingFileMatch = /^\/api\/public\/meeting-files\/([A-Za-z0-9_-]{16,80})(?:\/[^/]+)?$/.exec(requestUrl.pathname);
+  if (request.method === "GET" && publicMeetingFileMatch) {
+    const config = await loadConfig();
+    const file = config.meetingFiles.find((item) => item.id === publicMeetingFileMatch[1]);
+    if (!file) {
+      response.writeHead(404);
+      response.end("Not found");
+      return;
+    }
+    try {
+      const content = await fs.readFile(path.join(MEETING_FILES_DIR, file.storedName));
+      response.writeHead(200, {
+        "Content-Type": "application/octet-stream",
+        "Content-Length": content.length,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+      });
+      response.end(content);
+    } catch {
+      response.writeHead(404);
+      response.end("Not found");
+    }
+    return;
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/admin/login") {
@@ -3324,6 +3529,55 @@ async function handleApi(request, requestUrl, response) {
   if (request.method === "GET" && requestUrl.pathname === "/api/config") {
     const config = await loadConfig();
     return json(response, 200, sanitizeConfigForAdmin(config));
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/meeting-registry") {
+    const config = await loadConfig();
+    const result = await syncMeetingRegistry(config);
+    return json(response, 200, { meetings: result.registry, syncError: result.syncError, periodDays: { past: 30, future: 90 } });
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/meeting-files") {
+    const config = await loadConfig();
+    return json(response, 200, { files: config.meetingFiles.map(({ storedName, ...file }) => file) });
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/meeting-files") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request, Math.ceil(MAX_MEETING_FILE_BYTES * 1.4) + 32 * 1024);
+    const replacedFile = body.id ? config.meetingFiles.find((file) => file.id === String(body.id)) : null;
+    if (body.id && !replacedFile) {
+      return json(response, 404, { error: "Файл для замены не найден." });
+    }
+    if (!replacedFile && config.meetingFiles.length >= MAX_MEETING_FILES) {
+      return json(response, 400, { error: "Можно добавить не больше 10 файлов." });
+    }
+    try {
+      const nextFile = await saveMeetingFile(body, replacedFile);
+      const nextConfig = {
+        ...config,
+        meetingFiles: replacedFile
+          ? config.meetingFiles.map((file) => (file.id === replacedFile.id ? nextFile : file))
+          : [...config.meetingFiles, nextFile],
+      };
+      await saveConfig(nextConfig);
+      return json(response, 200, { files: nextConfig.meetingFiles.map(({ storedName, ...file }) => file) });
+    } catch (error) {
+      return json(response, error.statusCode || 400, { error: error.statusCode === 413 ? "Размер файла должен быть не больше 5 МБ." : "Не удалось сохранить файл." });
+    }
+  }
+
+  if (request.method === "DELETE" && requestUrl.pathname === "/api/meeting-files") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request);
+    const file = config.meetingFiles.find((item) => item.id === String(body.id || ""));
+    if (!file) {
+      return json(response, 404, { error: "Файл не найден." });
+    }
+    await fs.unlink(path.join(MEETING_FILES_DIR, file.storedName)).catch(() => null);
+    const nextConfig = { ...config, meetingFiles: config.meetingFiles.filter((item) => item.id !== file.id) };
+    await saveConfig(nextConfig);
+    return json(response, 200, { files: nextConfig.meetingFiles.map(({ storedName, ...item }) => item) });
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/config") {

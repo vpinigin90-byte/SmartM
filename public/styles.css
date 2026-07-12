@@ -3039,6 +3039,111 @@ body.modal-open {
   color: var(--primary);
 }
 
+.admin-shell .mts-link-error-preview {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, #f01b58 52%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, #f01b58 9%, var(--booking-time-background));
+}
+
+.admin-shell .mts-link-error-preview span {
+  color: #f57b9f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-shell .mts-link-error-preview p {
+  margin: 0;
+  color: var(--foreground);
+  line-height: 1.45;
+}
+
+.admin-shell .file-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.admin-shell .meeting-files-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.admin-shell .meeting-files-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+
+.admin-shell .meeting-files-table th,
+.admin-shell .meeting-files-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+  text-align: left;
+}
+
+.admin-shell .meeting-files-table th {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-shell .meeting-files-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-shell .meeting-file-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 16%, var(--secondary));
+  color: var(--primary);
+}
+
+.admin-shell .meeting-file-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-shell .registry-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.admin-shell .registry-sections .secondary-button.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.admin-shell .registry-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-shell .registry-table td {
+  vertical-align: top;
+}
+
 .admin-shell #mts-link-form .appearance-groups {
   gap: 18px;
 }
