@@ -10,6 +10,7 @@ const selectedDateSummaryNode = document.querySelector("#selected-date-summary")
 const selectedDatePanel = document.querySelector("#selected-date-panel");
 const bookingTitleNode = document.querySelector("#booking-title");
 const bookingWidget = document.querySelector(".smartm-widget");
+const bookingShell = document.querySelector(".booking-shell");
 const formPanel = document.querySelector("#booking-form-panel");
 const form = document.querySelector("#booking-form");
 const startInput = document.querySelector("#booking-start");
@@ -916,7 +917,12 @@ loadSlots().finally(() => {
 window.addEventListener("load", notifyParentHeight);
 window.addEventListener("resize", notifyParentHeight);
 if (window.ResizeObserver) {
-  new ResizeObserver(() => notifyParentHeight()).observe(document.body);
+  const parentHeightObserver = new ResizeObserver(() => notifyParentHeight());
+  parentHeightObserver.observe(document.body);
+  parentHeightObserver.observe(document.documentElement);
+  if (bookingShell) {
+    parentHeightObserver.observe(bookingShell);
+  }
 }
 if (window.MutationObserver) {
   new MutationObserver(() => notifyParentHeight()).observe(document.body, {

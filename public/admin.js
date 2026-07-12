@@ -76,7 +76,8 @@ function buildEmbedCode(version = embedCodeVersion) {
     .scrolltool-booking-embed iframe {
       display: block;
       width: 100%;
-      height: 960px;
+      height: 1px;
+      min-height: 0;
       border: 0;
       border-radius: 20px;
       background: #000000;
@@ -100,10 +101,10 @@ function buildEmbedCode(version = embedCodeVersion) {
 
   <iframe
     id="scrolltool-booking-frame"
-    src="https://meet.scroll-tool.ru/booking?embed=1${versionParam}"
+    data-src="https://meet.scroll-tool.ru/booking?embed=1${versionParam}"
     title="Выбор времени для встречи Scrolltool"
-    loading="lazy"
     allow="clipboard-write"
+    scrolling="no"
   ></iframe>
 
   <script>
@@ -124,10 +125,11 @@ function buildEmbedCode(version = embedCodeVersion) {
         if (!nextHeight || Number.isNaN(nextHeight)) {
           return;
         }
-        iframe.style.height = Math.max(nextHeight, 640) + "px";
+        iframe.style.height = Math.ceil(nextHeight) + "px";
       }
 
       window.addEventListener("message", handleResize);
+      iframe.src = iframe.getAttribute("data-src");
     })();
   </script>
 </div>`;
