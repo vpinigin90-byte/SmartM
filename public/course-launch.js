@@ -14,8 +14,8 @@
   const verifyButton = document.querySelector("#course-verify-button");
   const changeEmailButton = document.querySelector("#course-change-email-button");
   const statusNode = document.querySelector("#course-auth-status");
-  const frame = document.querySelector("#course-frame");
   const openLink = document.querySelector("#course-open-link");
+  const continueLink = document.querySelector("#course-continue-link");
   const completeButton = document.querySelector("#course-complete-button");
 
   const clientSessionId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
@@ -60,11 +60,17 @@
   function showPlayer(courseUrl) {
     authView.classList.add("hidden-panel");
     playerView.classList.remove("hidden-panel");
-    frame.src = courseUrl;
     openLink.href = courseUrl;
+    continueLink.href = courseUrl;
     learnerLabelNode.textContent = activeLearner?.email ? `Ученик: ${activeLearner.email}` : "";
     enqueueEvent("course_opened", { source: "protected_link" });
     enqueueEvent("course_started", {});
+    enqueueEvent("course_redirected", { sourceUrl: courseUrl });
+    flushEvents().finally(() => {
+      window.setTimeout(() => {
+        window.location.href = courseUrl;
+      }, 500);
+    });
   }
 
   function enqueueEvent(eventType, payload = {}) {
@@ -173,10 +179,6 @@
     codeInput.value = "";
     setStatus("", "");
     emailInput.focus();
-  });
-
-  frame.addEventListener("load", () => {
-    enqueueEvent("iframe_loaded", { sourceUrl: frame.src });
   });
 
   completeButton.addEventListener("click", async () => {

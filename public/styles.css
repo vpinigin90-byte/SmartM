@@ -247,6 +247,31 @@ select {
   background: #ffffff;
 }
 
+.course-redirect-panel {
+  display: grid;
+  place-items: center;
+  min-height: 55vh;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(21, 24, 26, 0.82);
+  box-shadow: var(--shadow-sm);
+}
+
+.course-redirect-panel > div {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.course-redirect-panel h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 30px;
+  line-height: 1.1;
+}
+
 body.booking-page.embedded-booking {
   min-height: 0;
   background: #000000;
