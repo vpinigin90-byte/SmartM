@@ -1,7 +1,9 @@
 const fs = require("fs/promises");
 const http = require("http");
+const net = require("net");
 const path = require("path");
 const crypto = require("crypto");
+const tls = require("tls");
 const { URL } = require("url");
 
 const HOST = "0.0.0.0";
@@ -18,6 +20,14 @@ const MEETING_FILES_DIR = path.join(DATA_DIR, "meeting-files");
 const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || "https://meet.scroll-tool.ru").replace(/\/+$/, "");
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === "production" ? "" : "Zz123456");
+const SMTP_HOST = String(process.env.SMTP_HOST || "").trim();
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
+const SMTP_SECURE = String(process.env.SMTP_SECURE || "").trim().toLowerCase() === "true" || SMTP_PORT === 465;
+const SMTP_USER = String(process.env.SMTP_USER || "").trim();
+const SMTP_PASSWORD = String(process.env.SMTP_PASSWORD || "").trim();
+const SMTP_FROM = String(process.env.SMTP_FROM || SMTP_USER || "no-reply@scroll-tool.ru").trim();
+const SMTP_FROM_NAME = String(process.env.SMTP_FROM_NAME || "Scrolltool").trim();
+const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS) || 15000;
 const SESSION_COOKIE = "smartm_admin";
 const LEARNER_SESSION_COOKIE = "scrolltool_learner";
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("base64url");
@@ -958,6 +968,227 @@ function setPublicCorsHeaders(response) {
 function redirect(response, location) {
   response.writeHead(302, { Location: location });
   response.end();
+}
+
+function isSmtpConfigured() {
+  return Boolean(SMTP_HOST && SMTP_FROM);
+}
+
+function encodeMailHeader(value) {
+  const text = String(value || "").replace(/[\r\n]+/g, " ").trim();
+  return /^[\x20-\x7e]*$/.test(text) ? text : `=?UTF-8?B?${Buffer.from(text, "utf8").toString("base64")}?=`;
+}
+
+function normalizeMailAddress(value) {
+  const email = String(value || "").trim();
+  if (!isEmail(email)) {
+    throw createHttpError("Некорректный e-mail для отправки письма.", 400);
+  }
+  return email;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function dotStuffSmtpMessage(message) {
+  return String(message).replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..");
+}
+
+async function sendSmtpMail({ to, subject, text, html }) {
+  if (!isSmtpConfigured()) {
+    throw createHttpError("SMTP для отправки писем не настроен.", 503);
+  }
+
+  const recipient = normalizeMailAddress(to);
+  const fromAddress = normalizeMailAddress(SMTP_FROM);
+  const boundary = `scrolltool-${crypto.randomBytes(12).toString("hex")}`;
+  const date = new Date().toUTCString();
+  const messageId = `<${crypto.randomUUID()}@${new URL(PUBLIC_BASE_URL).hostname}>`;
+  const headers = [
+    `From: ${encodeMailHeader(SMTP_FROM_NAME)} <${fromAddress}>`,
+    `To: <${recipient}>`,
+    `Subject: ${encodeMailHeader(subject)}`,
+    `Date: ${date}`,
+    `Message-ID: ${messageId}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+  const body = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    text,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    html,
+    "",
+    `--${boundary}--`,
+  ];
+  const message = `${headers.join("\r\n")}\r\n\r\n${body.join("\r\n")}`;
+
+  await withSmtpConnection(async (client) => {
+    await client.command(`MAIL FROM:<${fromAddress}>`, [250]);
+    await client.command(`RCPT TO:<${recipient}>`, [250, 251]);
+    await client.command("DATA", [354]);
+    await client.command(`${dotStuffSmtpMessage(message)}\r\n.`, [250], { raw: true });
+    await client.command("QUIT", [221]).catch(() => null);
+  });
+}
+
+function createSmtpTransport(secure) {
+  return secure
+    ? tls.connect({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        servername: SMTP_HOST,
+        timeout: SMTP_TIMEOUT_MS,
+      })
+    : net.connect({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        timeout: SMTP_TIMEOUT_MS,
+      });
+}
+
+async function withSmtpConnection(callback) {
+  let socket = createSmtpTransport(SMTP_SECURE);
+  let buffer = "";
+  let pendingResolve = null;
+  let pendingReject = null;
+
+  function attach(nextSocket) {
+    socket = nextSocket;
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk) => {
+      buffer += chunk;
+      const complete = /(?:^|\r?\n)\d{3} [^\r\n]*(?:\r?\n|$)/.test(buffer);
+      if (complete && pendingResolve) {
+        const resolve = pendingResolve;
+        pendingResolve = null;
+        pendingReject = null;
+        const response = buffer;
+        buffer = "";
+        resolve(response);
+      }
+    });
+    socket.on("error", (error) => {
+      if (pendingReject) {
+        const reject = pendingReject;
+        pendingResolve = null;
+        pendingReject = null;
+        reject(error);
+      }
+    });
+    socket.on("timeout", () => {
+      socket.destroy(new Error("SMTP timeout"));
+    });
+  }
+
+  function readResponse() {
+    if (/(?:^|\r?\n)\d{3} [^\r\n]*(?:\r?\n|$)/.test(buffer)) {
+      const response = buffer;
+      buffer = "";
+      return Promise.resolve(response);
+    }
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingResolve = null;
+        pendingReject = null;
+        reject(new Error("SMTP response timeout"));
+      }, SMTP_TIMEOUT_MS);
+      pendingResolve = (response) => {
+        clearTimeout(timer);
+        resolve(response);
+      };
+      pendingReject = (error) => {
+        clearTimeout(timer);
+        reject(error);
+      };
+    });
+  }
+
+  function parseCode(response) {
+    const line = String(response).trim().split(/\r?\n/).pop() || "";
+    return Number(line.slice(0, 3));
+  }
+
+  async function command(value, expectedCodes, options = {}) {
+    socket.write(options.raw ? `${value}\r\n` : `${value}\r\n`);
+    const response = await readResponse();
+    const code = parseCode(response);
+    if (!expectedCodes.includes(code)) {
+      throw createHttpError("SMTP-сервер отклонил отправку письма.", 502);
+    }
+    return response;
+  }
+
+  attach(socket);
+  try {
+    await readResponse();
+    let ehloResponse = await command(`EHLO ${new URL(PUBLIC_BASE_URL).hostname}`, [250]);
+    if (!SMTP_SECURE && /STARTTLS/im.test(ehloResponse)) {
+      await command("STARTTLS", [220]);
+      socket.removeAllListeners();
+      buffer = "";
+      attach(
+        tls.connect({
+          socket,
+          servername: SMTP_HOST,
+          timeout: SMTP_TIMEOUT_MS,
+        }),
+      );
+      await new Promise((resolve, reject) => {
+        socket.once("secureConnect", resolve);
+        socket.once("error", reject);
+      });
+      ehloResponse = await command(`EHLO ${new URL(PUBLIC_BASE_URL).hostname}`, [250]);
+    }
+
+    if (SMTP_USER && SMTP_PASSWORD) {
+      const authPlain = Buffer.from(`\u0000${SMTP_USER}\u0000${SMTP_PASSWORD}`, "utf8").toString("base64");
+      try {
+        await command(`AUTH PLAIN ${authPlain}`, [235]);
+      } catch {
+        await command("AUTH LOGIN", [334]);
+        await command(Buffer.from(SMTP_USER, "utf8").toString("base64"), [334]);
+        await command(Buffer.from(SMTP_PASSWORD, "utf8").toString("base64"), [235]);
+      }
+    }
+
+    await callback({ command });
+  } finally {
+    socket.end();
+  }
+}
+
+async function sendLearningOtpEmail({ email, code, launch }) {
+  const safeTitle = launch.title || "курс Scrolltool";
+  const subject = `Код доступа к курсу Scrolltool: ${code}`;
+  const text = [
+    `Код доступа к курсу "${safeTitle}": ${code}`,
+    "",
+    "Код действует 10 минут. Если вы не запрашивали доступ к курсу, просто проигнорируйте это письмо.",
+  ].join("\n");
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
+      <p>Код доступа к курсу <strong>${escapeHtml(safeTitle)}</strong>:</p>
+      <p style="font-size: 28px; font-weight: 700; letter-spacing: 4px; margin: 16px 0;">${escapeHtml(code)}</p>
+      <p>Код действует 10 минут.</p>
+      <p style="color: #6b7280;">Если вы не запрашивали доступ к курсу, просто проигнорируйте это письмо.</p>
+    </div>
+  `;
+  await sendSmtpMail({ to: email, subject, text, html });
 }
 
 function parseCookies(request) {
@@ -3835,6 +4066,11 @@ async function handleApi(request, requestUrl, response) {
       if (canAccess && checkRateLimitForKey("learning-otp-email", `${launch.id}:${email}`, LEARNING_OTP_RATE_LIMIT)) {
         const code = createLearningOtpCode();
         devCode = code;
+        if (isSmtpConfigured()) {
+          await sendLearningOtpEmail({ email, code, launch });
+        } else if (IS_PRODUCTION) {
+          return json(response, 503, { error: "Отправка e-mail пока не настроена." });
+        }
         await updateLearningData((currentData) => ({
           ...currentData,
           otpChallenges: [
@@ -4594,6 +4830,10 @@ if (!process.env.ADMIN_PASSWORD) {
 
 if (!process.env.SESSION_SECRET) {
   console.warn("[Security] SESSION_SECRET is not set. Sessions will reset on server restart.");
+}
+
+if (IS_PRODUCTION && !isSmtpConfigured()) {
+  console.warn("[Learning] SMTP is not configured. Course OTP e-mails will not be sent.");
 }
 
 server.listen(PORT, HOST, () => {
