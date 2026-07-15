@@ -163,6 +163,10 @@ body.booking-page {
   background: #000000;
 }
 
+body.course-launch-page {
+  background: #000000;
+}
+
 button,
 input,
 textarea,
@@ -205,6 +209,42 @@ select {
   display: grid;
   gap: 24px;
   padding: 16px 28px 70px;
+}
+
+.course-launch-shell {
+  min-height: 100vh;
+  padding: 16px 28px 32px;
+}
+
+.course-auth-card {
+  margin-top: min(10vh, 96px);
+}
+
+.course-player-view {
+  display: grid;
+  gap: 16px;
+  min-height: calc(100vh - 48px);
+}
+
+.course-player-header {
+  align-items: flex-start;
+}
+
+.course-frame-panel {
+  min-height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(21, 24, 26, 0.82);
+  overflow: hidden;
+}
+
+.course-frame-panel iframe {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 160px);
+  min-height: 640px;
+  border: 0;
+  background: #ffffff;
 }
 
 body.booking-page.embedded-booking {
@@ -1030,6 +1070,201 @@ button:disabled {
 .admin-shell .app-header {
   padding: 18px 22px;
   background: rgba(21, 24, 26, 0.82);
+}
+
+.admin-home-view,
+.admin-module-view {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-home-header {
+  margin-bottom: 4px;
+}
+
+.admin-product-grid,
+.dashboard-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-product-card,
+.dashboard-preview-card {
+  display: grid;
+  align-content: space-between;
+  gap: 20px;
+  min-height: 230px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--booking-panel-radius) * 1px);
+  background: rgba(21, 24, 26, 0.82);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-product-card h2,
+.dashboard-empty-state h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.admin-product-card p,
+.dashboard-preview-card p {
+  margin: 10px 0 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.admin-product-card .primary-button,
+.admin-product-card .secondary-button {
+  justify-self: start;
+}
+
+.admin-product-card.disabled-product {
+  opacity: 0.58;
+}
+
+.admin-product-card.disabled-product button {
+  cursor: not-allowed;
+}
+
+.dashboard-preview-card {
+  min-height: 156px;
+  gap: 12px;
+}
+
+.dashboard-preview-card span {
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.dashboard-preview-card strong {
+  color: var(--foreground);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.dashboard-empty-state {
+  display: grid;
+  min-height: 220px;
+  align-items: center;
+}
+
+.dashboard-empty-state p {
+  margin-top: 10px;
+}
+
+.course-dashboard-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.course-launch-list {
+  display: grid;
+  gap: 12px;
+}
+
+.course-launch-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--secondary);
+}
+
+.course-launch-card.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--secondary));
+}
+
+.course-launch-card h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.course-launch-card p {
+  margin: 8px 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.course-launch-card a {
+  color: var(--primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.course-launch-metrics {
+  display: grid;
+  gap: 6px;
+  min-width: 130px;
+}
+
+.course-launch-metrics span {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.course-dashboard-workspace {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.course-events-list {
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.course-event-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--secondary);
+}
+
+.course-event-row div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.course-event-row strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.course-event-row span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.course-event-row code {
+  display: block;
+  max-width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  background: #080909;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow-x: auto;
 }
 
 .admin-shell .brand-mark {
@@ -1925,6 +2160,10 @@ body.modal-open {
   }
 
   .overview-grid,
+  .admin-product-grid,
+  .dashboard-preview-grid,
+  .course-launch-card,
+  .course-dashboard-workspace,
   .password-wrap,
   .split,
   .toolbar,
@@ -1936,9 +2175,15 @@ body.modal-open {
   .results,
   .booking-copy,
   .booking-panel,
+  .course-launch-shell,
   .lead,
   .hero > .lead {
     padding: 18px;
+  }
+
+  .course-frame-panel iframe {
+    height: 72vh;
+    min-height: 520px;
   }
 
   .actions,

@@ -39,6 +39,56 @@
       </section>
 
       <section id="admin-view" class="card hidden-panel">
+        <section id="admin-home-view" class="admin-home-view">
+          <header class="app-header admin-home-header">
+            <div class="brand-lockup">
+              <div>
+                <p class="eyebrow">Scrolltool Admin</p>
+                <h1>Центр управления</h1>
+              </div>
+            </div>
+            <div class="header-actions">
+              <button id="home-logout-button" class="ghost-button" type="button">Выйти</button>
+            </div>
+          </header>
+
+          <section class="admin-product-grid" aria-label="Разделы админки">
+            <article class="admin-product-card">
+              <div>
+                <p class="eyebrow">SmartM</p>
+                <h2>Демо-встречи</h2>
+                <p>
+                  Управление самозаписью, сотрудниками, доступностью, файлами ко встрече и виджетом для сайта.
+                </p>
+              </div>
+              <button id="open-meetings-admin-button" class="primary-button" type="button">Открыть</button>
+            </article>
+
+            <article class="admin-product-card disabled-product" aria-disabled="true">
+              <div>
+                <p class="eyebrow">В разработке</p>
+                <h2>Персональный ассистент</h2>
+                <p>
+                  Будущий интерфейс для настройки ассистента и сценариев сопровождения клиентов.
+                </p>
+              </div>
+              <button class="secondary-button" type="button" disabled>Скоро</button>
+            </article>
+
+            <article class="admin-product-card">
+              <div>
+                <p class="eyebrow">Learning analytics</p>
+                <h2>Дашборды запуска курсов</h2>
+                <p>
+                  Аналитика защищенных запусков курсов: доступы, прохождения, события и результаты учеников.
+                </p>
+              </div>
+              <button id="open-course-dashboards-button" class="primary-button" type="button">Открыть</button>
+            </article>
+          </section>
+        </section>
+
+        <section id="admin-meetings-view" class="admin-module-view hidden-panel">
         <header class="app-header">
           <div class="brand-lockup">
             <div>
@@ -46,6 +96,7 @@
             </div>
           </div>
           <div class="header-actions" aria-label="Интеграции">
+            <button id="meetings-home-button" class="ghost-button" type="button">Все разделы</button>
             <button id="meeting-registry-button" class="secondary-button" type="button">Реестр встреч</button>
             <button id="logout-button" class="ghost-button" type="button">Выйти</button>
           </div>
@@ -565,6 +616,88 @@
             </div>
           </section>
         </section>
+        </section>
+
+        <section id="admin-course-dashboard-view" class="admin-module-view hidden-panel">
+          <header class="app-header">
+            <div class="brand-lockup">
+              <div>
+                <p class="eyebrow">Learning analytics</p>
+                <h1>Дашборды запуска курсов</h1>
+              </div>
+            </div>
+            <div class="header-actions">
+              <button id="dashboards-home-button" class="ghost-button" type="button">Все разделы</button>
+              <button id="dashboard-logout-button" class="ghost-button" type="button">Выйти</button>
+            </div>
+          </header>
+
+          <section class="dashboard-preview-grid" aria-label="Ключевые показатели запуска курсов">
+            <article class="dashboard-preview-card">
+              <span>Запуски</span>
+              <strong id="course-dashboard-launches-count">0</strong>
+              <p>Защищенные ссылки и открытые публикации курсов.</p>
+            </article>
+            <article class="dashboard-preview-card">
+              <span>Ученики</span>
+              <strong id="course-dashboard-learners-count">0</strong>
+              <p>Пользователи, прошедшие идентификацию или открывшие курс.</p>
+            </article>
+            <article class="dashboard-preview-card">
+              <span>События</span>
+              <strong id="course-dashboard-events-count">0</strong>
+              <p>Клики, скроллы, ответы, прогресс и завершения.</p>
+            </article>
+          </section>
+
+          <section class="panel course-dashboard-panel">
+            <div class="results-head">
+              <div>
+                <h2>Запуски курсов</h2>
+                <p class="summary full-width-summary">
+                  Первый прототип использует защищенную ссылку meet.scroll-tool.ru и открывает тестовый курс Scrolltool после e-mail OTP.
+                </p>
+              </div>
+              <button id="refresh-course-dashboard-button" class="secondary-button" type="button">Обновить</button>
+            </div>
+            <p id="course-dashboard-status" class="status" aria-live="polite"></p>
+            <div id="course-launch-list" class="course-launch-list"></div>
+          </section>
+
+          <section class="workspace course-dashboard-workspace">
+            <section class="panel">
+              <div class="results-head">
+                <h2>Ученики</h2>
+                <p class="summary">История прохождения по выбранному запуску.</p>
+              </div>
+              <div class="meeting-files-table-wrap">
+                <table class="meeting-files-table">
+                  <thead>
+                    <tr>
+                      <th>E-mail</th>
+                      <th>Прогресс</th>
+                      <th>События</th>
+                      <th>Завершение</th>
+                    </tr>
+                  </thead>
+                  <tbody id="course-learners-list">
+                    <tr><td colspan="4">Данных пока нет.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="results-head">
+                <h2>Последние события</h2>
+                <p class="summary">Событийный поток от защищенной страницы курса.</p>
+              </div>
+              <div id="course-events-list" class="course-events-list empty">
+                <p>Событий пока нет.</p>
+              </div>
+            </section>
+          </section>
+        </section>
       </section>
     </main>
 
@@ -572,5 +705,6 @@
     <script src="/admin-integrations.js"></script>
     <script src="/admin-meeting-files.js"></script>
     <script src="/admin-meeting-registry.js"></script>
+    <script src="/course-dashboard.js"></script>
   </body>
 </html>

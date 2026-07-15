@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Запуск курса Scrolltool</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="course-launch-page">
+    <main class="course-launch-shell">
+      <section id="course-auth-view" class="auth-card course-auth-card">
+        <div>
+          <p class="eyebrow">Scrolltool Learning</p>
+          <h1 id="course-title">Запуск курса</h1>
+        </div>
+        <p id="course-description" class="summary">
+          Подтвердите доступ, чтобы открыть материал.
+        </p>
+
+        <form id="course-email-form" class="form">
+          <label class="field">
+            <span>E-mail</span>
+            <input id="course-email" type="email" autocomplete="email" placeholder="name@company.ru" required />
+          </label>
+          <button id="course-code-button" class="primary-button" type="submit">Получить код</button>
+        </form>
+
+        <form id="course-code-form" class="form hidden-panel">
+          <label class="field">
+            <span>Код подтверждения</span>
+            <input id="course-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="6" required />
+          </label>
+          <div class="actions">
+            <button id="course-verify-button" class="primary-button" type="submit">Открыть курс</button>
+            <button id="course-change-email-button" class="ghost-button" type="button">Изменить e-mail</button>
+          </div>
+        </form>
+
+        <p id="course-auth-status" class="status" aria-live="polite"></p>
+      </section>
+
+      <section id="course-player-view" class="course-player-view hidden-panel">
+        <header class="app-header course-player-header">
+          <div>
+            <p class="eyebrow">Курс открыт</p>
+            <h1 id="course-player-title">Scrolltool</h1>
+            <p id="course-learner-label" class="summary"></p>
+          </div>
+          <div class="header-actions">
+            <button id="course-complete-button" class="primary-button" type="button">Завершить</button>
+            <a id="course-open-link" class="secondary-button" href="#" target="_blank" rel="noopener">Открыть отдельно</a>
+          </div>
+        </header>
+
+        <section class="course-frame-panel">
+          <iframe id="course-frame" title="Курс Scrolltool" allow="fullscreen; clipboard-write"></iframe>
+        </section>
+      </section>
+    </main>
+
+    <script src="/course-launch.js"></script>
+  </body>
+</html>

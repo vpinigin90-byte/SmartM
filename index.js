@@ -13,11 +13,13 @@ const MAIL_RU_CALDAV_URLS = [
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const CONFIG_PATH = path.join(DATA_DIR, "smartm-config.json");
+const LEARNING_DATA_PATH = path.join(DATA_DIR, "learning-data.json");
 const MEETING_FILES_DIR = path.join(DATA_DIR, "meeting-files");
 const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || "https://meet.scroll-tool.ru").replace(/\/+$/, "");
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === "production" ? "" : "Zz123456");
 const SESSION_COOKIE = "smartm_admin";
+const LEARNER_SESSION_COOKIE = "scrolltool_learner";
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("base64url");
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const CSRF_HEADER = "x-csrf-token";
@@ -32,6 +34,11 @@ const PUBLIC_RATE_LIMIT = { limit: 60, windowMs: 10 * 60 * 1000 };
 const PUBLIC_BOOKING_IP_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
 const PUBLIC_BOOKING_EMAIL_RATE_LIMIT = { limit: 3, windowMs: 60 * 60 * 1000 };
 const PUBLIC_BOOKING_DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+const LEARNING_OTP_RATE_LIMIT = { limit: 5, windowMs: 15 * 60 * 1000 };
+const LEARNING_EVENT_RATE_LIMIT = { limit: 180, windowMs: 10 * 60 * 1000 };
+const LEARNING_OTP_TTL_MS = 10 * 60 * 1000;
+const LEARNING_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const MAX_LEARNING_EVENTS = 10000;
 const MTS_LINK_ALLOWED_HOSTS = new Set(
   String(process.env.MTS_LINK_ALLOWED_HOSTS || "userapi.mts-link.ru")
     .split(",")
@@ -50,6 +57,19 @@ const DEFAULT_SLOT_RULES = {
   timeZone: "Europe/Moscow",
   excludedDates: [],
 };
+const DEFAULT_COURSE_LAUNCHES = [
+  {
+    id: "lidea-demo",
+    title: "Кукуруза (Lidea)",
+    description: "Тестовый защищенный запуск курса Scrolltool для прототипа аналитики.",
+    courseId: "9127c742-171d-495f-a4c5-e3f4649a9a74",
+    sourceUrl: "https://go.scroll-tool.ru/share/9127c742-171d-495f-a4c5-e3f4649a9a74",
+    accessMode: "email_otp",
+    allowedEmails: ["demo@scrolltool.ru", "student@example.com"],
+    allowedDomains: ["scrolltool.ru"],
+    createdAt: "2026-07-16T00:00:00.000Z",
+  },
+];
 const DEFAULT_MTS_LINK_SETTINGS = {
   enabled: false,
   accountMode: "shared",
@@ -809,6 +829,108 @@ function normalizeConfig(config = {}) {
   };
 }
 
+function normalizeEmailAddress(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeCourseLaunch(source = {}) {
+  const fallback = DEFAULT_COURSE_LAUNCHES[0];
+  const id = String(source.id || fallback.id).trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || fallback.id;
+  const sourceUrl = String(source.sourceUrl || fallback.sourceUrl).trim();
+  return {
+    id,
+    title: String(source.title || fallback.title).trim().slice(0, 180) || fallback.title,
+    description: String(source.description || "").trim().slice(0, 800),
+    courseId: String(source.courseId || id).trim().slice(0, 120) || id,
+    sourceUrl,
+    accessMode: source.accessMode === "open" ? "open" : "email_otp",
+    allowedEmails: Array.isArray(source.allowedEmails)
+      ? [...new Set(source.allowedEmails.map(normalizeEmailAddress).filter(isEmail))].slice(0, 500)
+      : [],
+    allowedDomains: Array.isArray(source.allowedDomains)
+      ? [...new Set(source.allowedDomains.map((domain) => String(domain || "").trim().toLowerCase().replace(/^@/, "")).filter(Boolean))].slice(0, 100)
+      : [],
+    createdAt: String(source.createdAt || new Date().toISOString()).trim(),
+  };
+}
+
+function normalizeLearningData(data = {}) {
+  const launchMap = new Map(DEFAULT_COURSE_LAUNCHES.map((launch) => [launch.id, normalizeCourseLaunch(launch)]));
+  if (Array.isArray(data.launches)) {
+    data.launches.forEach((launch) => {
+      const normalized = normalizeCourseLaunch(launch);
+      launchMap.set(normalized.id, normalized);
+    });
+  }
+
+  const learners = Array.isArray(data.learners)
+    ? data.learners
+        .map((learner) => ({
+          id: String(learner?.id || "").trim(),
+          email: normalizeEmailAddress(learner?.email),
+          createdAt: String(learner?.createdAt || "").trim() || new Date().toISOString(),
+          lastSeenAt: String(learner?.lastSeenAt || "").trim() || null,
+        }))
+        .filter((learner) => learner.id && isEmail(learner.email))
+        .slice(-5000)
+    : [];
+
+  const sessions = Array.isArray(data.sessions)
+    ? data.sessions
+        .map((session) => ({
+          id: String(session?.id || "").trim(),
+          launchId: String(session?.launchId || "").trim(),
+          learnerId: String(session?.learnerId || "").trim(),
+          createdAt: String(session?.createdAt || "").trim() || new Date().toISOString(),
+          expiresAt: String(session?.expiresAt || "").trim(),
+          lastSeenAt: String(session?.lastSeenAt || "").trim() || null,
+        }))
+        .filter((session) => session.id && session.launchId && session.learnerId && Date.parse(session.expiresAt))
+        .slice(-5000)
+    : [];
+
+  const otpChallenges = Array.isArray(data.otpChallenges)
+    ? data.otpChallenges
+        .map((challenge) => ({
+          id: String(challenge?.id || "").trim(),
+          launchId: String(challenge?.launchId || "").trim(),
+          email: normalizeEmailAddress(challenge?.email),
+          codeHash: String(challenge?.codeHash || "").trim(),
+          expiresAt: String(challenge?.expiresAt || "").trim(),
+          attemptsCount: Math.max(0, Number(challenge?.attemptsCount) || 0),
+          consumedAt: String(challenge?.consumedAt || "").trim() || null,
+          createdAt: String(challenge?.createdAt || "").trim() || new Date().toISOString(),
+        }))
+        .filter((challenge) => challenge.id && challenge.launchId && isEmail(challenge.email) && challenge.codeHash)
+        .slice(-2000)
+    : [];
+
+  const events = Array.isArray(data.events)
+    ? data.events
+        .map((event) => ({
+          id: String(event?.id || crypto.randomUUID()).trim(),
+          launchId: String(event?.launchId || "").trim(),
+          courseId: String(event?.courseId || "").trim(),
+          learnerId: String(event?.learnerId || "").trim() || null,
+          sessionId: String(event?.sessionId || "").trim() || null,
+          eventType: String(event?.eventType || "").trim().slice(0, 80),
+          eventTime: String(event?.eventTime || event?.createdAt || "").trim() || new Date().toISOString(),
+          payload: event?.payload && typeof event.payload === "object" && !Array.isArray(event.payload) ? event.payload : {},
+          createdAt: String(event?.createdAt || "").trim() || new Date().toISOString(),
+        }))
+        .filter((event) => event.id && event.launchId && event.eventType)
+        .slice(-MAX_LEARNING_EVENTS)
+    : [];
+
+  return {
+    launches: [...launchMap.values()],
+    learners,
+    sessions,
+    otpChallenges,
+    events,
+  };
+}
+
 function getActiveEmployee(config) {
   const normalizedConfig = normalizeConfig(config);
   return (
@@ -914,6 +1036,130 @@ function createHttpError(message, statusCode = 400) {
   return error;
 }
 
+function findCourseLaunch(learningData, launchId) {
+  return learningData.launches.find((launch) => launch.id === launchId) || null;
+}
+
+function canEmailAccessLaunch(email, launch) {
+  const normalizedEmail = normalizeEmailAddress(email);
+  if (launch.accessMode === "open") {
+    return isEmail(normalizedEmail);
+  }
+  if (!isEmail(normalizedEmail)) {
+    return false;
+  }
+  if (launch.allowedEmails.includes(normalizedEmail)) {
+    return true;
+  }
+  const domain = normalizedEmail.split("@")[1];
+  return Boolean(domain && launch.allowedDomains.includes(domain));
+}
+
+function hashLearningOtp(launchId, email, code) {
+  return crypto
+    .createHmac("sha256", SESSION_SECRET)
+    .update(`learning-otp:${launchId}:${normalizeEmailAddress(email)}:${code}`)
+    .digest("base64url");
+}
+
+function createLearningOtpCode() {
+  return String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+}
+
+function sanitizeLaunchForPublic(launch) {
+  return {
+    id: launch.id,
+    title: launch.title,
+    description: launch.description,
+    courseId: launch.courseId,
+    accessMode: launch.accessMode,
+  };
+}
+
+function sanitizeLaunchForAdmin(launch) {
+  return {
+    ...launch,
+    publicUrl: `${PUBLIC_BASE_URL}/learn/${encodeURIComponent(launch.id)}`,
+  };
+}
+
+function createLearningEvent(launch, learnerAccess, event) {
+  const payload = event?.payload && typeof event.payload === "object" && !Array.isArray(event.payload) ? event.payload : {};
+  return {
+    id: String(event?.eventId || crypto.randomUUID()).trim(),
+    launchId: launch.id,
+    courseId: launch.courseId,
+    learnerId: learnerAccess?.learner?.id || null,
+    sessionId: String(event?.sessionId || learnerAccess?.session?.id || "").trim() || null,
+    eventType: String(event?.eventType || "").trim().slice(0, 80),
+    eventTime: String(event?.eventTime || new Date().toISOString()).trim(),
+    payload: JSON.parse(JSON.stringify(payload)).constructor === Object ? payload : {},
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function getLearningSummary(learningData) {
+  const learnerById = new Map(learningData.learners.map((learner) => [learner.id, learner]));
+  return learningData.launches.map((launch) => {
+    const events = learningData.events.filter((event) => event.launchId === launch.id);
+    const learnerSummaries = new Map();
+    events.forEach((event) => {
+      if (!event.learnerId) {
+        return;
+      }
+      const summary = learnerSummaries.get(event.learnerId) || {
+        learnerId: event.learnerId,
+        email: learnerById.get(event.learnerId)?.email || "unknown",
+        startedAt: null,
+        completedAt: null,
+        lastEventAt: null,
+        progressPercent: 0,
+        score: null,
+        passed: null,
+        eventsCount: 0,
+      };
+      summary.eventsCount += 1;
+      summary.lastEventAt = event.eventTime;
+      if (!summary.startedAt && ["course_opened", "course_started", "iframe_loaded"].includes(event.eventType)) {
+        summary.startedAt = event.eventTime;
+      }
+      if (event.eventType === "progress_changed") {
+        summary.progressPercent = Math.max(summary.progressPercent, Math.min(100, Number(event.payload?.progressPercent) || 0));
+      }
+      if (event.eventType === "course_completed") {
+        summary.completedAt = event.eventTime;
+        summary.progressPercent = 100;
+        summary.score = event.payload?.score === undefined ? summary.score : Number(event.payload.score);
+        summary.passed = event.payload?.passed === undefined ? true : Boolean(event.payload.passed);
+      }
+      learnerSummaries.set(event.learnerId, summary);
+    });
+
+    const learners = [...learnerSummaries.values()].sort((left, right) => String(right.lastEventAt || "").localeCompare(String(left.lastEventAt || "")));
+    const completedCount = learners.filter((learner) => learner.completedAt).length;
+    const averageProgress = learners.length
+      ? Math.round(learners.reduce((sum, learner) => sum + learner.progressPercent, 0) / learners.length)
+      : 0;
+    return {
+      launch: sanitizeLaunchForAdmin(launch),
+      metrics: {
+        learnersCount: learners.length,
+        eventsCount: events.length,
+        completedCount,
+        averageProgress,
+      },
+      learners,
+      recentEvents: events
+        .slice(-80)
+        .reverse()
+        .map((event) => ({
+          ...event,
+          learnerEmail: event.learnerId ? learnerById.get(event.learnerId)?.email || "unknown" : "anonymous",
+        })),
+    };
+  });
+}
+
 function getSessionToken(request) {
   return parseCookies(request)[SESSION_COOKIE] || "";
 }
@@ -946,6 +1192,77 @@ function createSessionCookie(sessionToken) {
 function clearSessionCookie() {
   const secureFlag = IS_PRODUCTION ? "; Secure" : "";
   return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureFlag}`;
+}
+
+function createSignedToken(payloadObject, scope) {
+  const payload = Buffer.from(JSON.stringify(payloadObject), "utf8").toString("base64url");
+  const signature = crypto.createHmac("sha256", SESSION_SECRET).update(`${scope}:${payload}`).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifySignedToken(token, scope) {
+  if (!token || !token.includes(".")) {
+    return null;
+  }
+
+  const [payload, signature] = token.split(".");
+  const expectedSignature = crypto.createHmac("sha256", SESSION_SECRET).update(`${scope}:${payload}`).digest("base64url");
+  const signatureBuffer = Buffer.from(signature || "");
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function createLearnerSessionCookie(session) {
+  const token = createSignedToken(
+    {
+      sessionId: session.id,
+      launchId: session.launchId,
+      learnerId: session.learnerId,
+      expiresAt: Date.parse(session.expiresAt),
+    },
+    "learner",
+  );
+  const secureFlag = IS_PRODUCTION ? "; Secure" : "";
+  return `${LEARNER_SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(LEARNING_SESSION_TTL_MS / 1000)}${secureFlag}`;
+}
+
+function clearLearnerSessionCookie() {
+  const secureFlag = IS_PRODUCTION ? "; Secure" : "";
+  return `${LEARNER_SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureFlag}`;
+}
+
+function getLearnerSessionFromRequest(request, learningData, launchId) {
+  const token = parseCookies(request)[LEARNER_SESSION_COOKIE];
+  const payload = verifySignedToken(token, "learner");
+  if (!payload || payload.launchId !== launchId || Number(payload.expiresAt) <= Date.now()) {
+    return null;
+  }
+
+  const session = learningData.sessions.find(
+    (item) =>
+      item.id === payload.sessionId &&
+      item.launchId === launchId &&
+      item.learnerId === payload.learnerId &&
+      Date.parse(item.expiresAt) > Date.now(),
+  );
+  if (!session) {
+    return null;
+  }
+
+  const learner = learningData.learners.find((item) => item.id === session.learnerId);
+  return learner ? { session, learner } : null;
 }
 
 function isAdminRequest(request) {
@@ -1926,6 +2243,31 @@ async function loadConfig() {
 async function saveConfig(config) {
   await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
   await fs.writeFile(CONFIG_PATH, JSON.stringify(normalizeConfig(config), null, 2), "utf8");
+}
+
+async function loadLearningData() {
+  try {
+    const fileContents = await fs.readFile(LEARNING_DATA_PATH, "utf8");
+    return normalizeLearningData(JSON.parse(fileContents));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return normalizeLearningData();
+    }
+
+    throw error;
+  }
+}
+
+async function saveLearningData(data) {
+  await fs.mkdir(path.dirname(LEARNING_DATA_PATH), { recursive: true });
+  await fs.writeFile(LEARNING_DATA_PATH, JSON.stringify(normalizeLearningData(data), null, 2), "utf8");
+}
+
+async function updateLearningData(mutator) {
+  const currentData = await loadLearningData();
+  const nextData = await mutator(currentData);
+  await saveLearningData(nextData);
+  return normalizeLearningData(nextData);
 }
 
 async function updateConfig(mutator) {
@@ -3460,6 +3802,200 @@ async function handleApi(request, requestUrl, response) {
     });
   }
 
+  const publicCourseLaunchMatch = /^\/api\/public\/course-launches\/([A-Za-z0-9_-]{1,80})(?:\/(access|auth\/request-code|auth\/verify-code|events|logout))?$/.exec(requestUrl.pathname);
+  if (publicCourseLaunchMatch) {
+    const launchId = publicCourseLaunchMatch[1];
+    const action = publicCourseLaunchMatch[2] || "access";
+    const learningData = await loadLearningData();
+    const launch = findCourseLaunch(learningData, launchId);
+    if (!launch) {
+      return json(response, 404, { error: "Запуск курса не найден." });
+    }
+
+    if (request.method === "GET" && action === "access") {
+      const learnerAccess = getLearnerSessionFromRequest(request, learningData, launch.id);
+      const authorized = launch.accessMode === "open" || Boolean(learnerAccess);
+      return json(response, 200, {
+        launch: sanitizeLaunchForPublic(launch),
+        authorized,
+        learner: learnerAccess ? { email: learnerAccess.learner.email } : null,
+        courseUrl: authorized ? launch.sourceUrl : null,
+      });
+    }
+
+    if (request.method === "POST" && action === "auth/request-code") {
+      if (!checkRateLimit(request, "learning-otp", LEARNING_OTP_RATE_LIMIT)) {
+        return json(response, 429, { error: "Слишком много запросов кода. Попробуйте позже." });
+      }
+      const body = await readRequestBody(request);
+      const email = normalizeEmailAddress(body.email);
+      const canAccess = canEmailAccessLaunch(email, launch);
+      let devCode = null;
+
+      if (canAccess && checkRateLimitForKey("learning-otp-email", `${launch.id}:${email}`, LEARNING_OTP_RATE_LIMIT)) {
+        const code = createLearningOtpCode();
+        devCode = code;
+        await updateLearningData((currentData) => ({
+          ...currentData,
+          otpChallenges: [
+            ...currentData.otpChallenges.filter(
+              (challenge) => !(challenge.launchId === launch.id && challenge.email === email && !challenge.consumedAt),
+            ),
+            {
+              id: crypto.randomUUID(),
+              launchId: launch.id,
+              email,
+              codeHash: hashLearningOtp(launch.id, email, code),
+              expiresAt: new Date(Date.now() + LEARNING_OTP_TTL_MS).toISOString(),
+              attemptsCount: 0,
+              consumedAt: null,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        }));
+      }
+
+      return json(response, 200, {
+        ok: true,
+        message: "Если доступ разрешен, код подтверждения будет отправлен.",
+        devCode: !IS_PRODUCTION && canAccess ? devCode : undefined,
+      });
+    }
+
+    if (request.method === "POST" && action === "auth/verify-code") {
+      const body = await readRequestBody(request);
+      const email = normalizeEmailAddress(body.email);
+      const code = String(body.code || "").trim();
+      if (!isEmail(email) || !/^\d{6}$/.test(code)) {
+        return json(response, 400, { error: "Укажите e-mail и шестизначный код." });
+      }
+
+      let learnerSession = null;
+      let verificationError = null;
+      const nextLearningData = await updateLearningData((currentData) => {
+        const now = Date.now();
+        const challengeIndex = currentData.otpChallenges.findIndex(
+          (challenge) =>
+            challenge.launchId === launch.id &&
+            challenge.email === email &&
+            !challenge.consumedAt &&
+            Date.parse(challenge.expiresAt) > now,
+        );
+        if (challengeIndex === -1) {
+          verificationError = "Код не найден или срок его действия истек.";
+          return currentData;
+        }
+
+        const challenge = currentData.otpChallenges[challengeIndex];
+        if (challenge.attemptsCount >= 5) {
+          verificationError = "Превышено количество попыток ввода кода.";
+          return currentData;
+        }
+
+        const nextChallenges = [...currentData.otpChallenges];
+        const nextChallenge = {
+          ...challenge,
+          attemptsCount: challenge.attemptsCount + 1,
+        };
+
+        if (challenge.codeHash !== hashLearningOtp(launch.id, email, code)) {
+          nextChallenges[challengeIndex] = nextChallenge;
+          verificationError = "Неверный код подтверждения.";
+          return { ...currentData, otpChallenges: nextChallenges };
+        }
+
+        const existingLearner = currentData.learners.find((learner) => learner.email === email);
+        const learner = existingLearner || {
+          id: crypto.randomUUID(),
+          email,
+          createdAt: new Date().toISOString(),
+          lastSeenAt: new Date().toISOString(),
+        };
+        const session = {
+          id: crypto.randomUUID(),
+          launchId: launch.id,
+          learnerId: learner.id,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + LEARNING_SESSION_TTL_MS).toISOString(),
+          lastSeenAt: new Date().toISOString(),
+        };
+        learnerSession = session;
+        nextChallenges[challengeIndex] = {
+          ...nextChallenge,
+          consumedAt: new Date().toISOString(),
+        };
+
+        return {
+          ...currentData,
+          learners: existingLearner
+            ? currentData.learners.map((item) => (item.id === learner.id ? { ...item, lastSeenAt: learner.lastSeenAt } : item))
+            : [...currentData.learners, learner],
+          sessions: [...currentData.sessions, session],
+          otpChallenges: nextChallenges,
+          events: [
+            ...currentData.events,
+            createLearningEvent(launch, { learner, session }, { eventType: "access_granted", payload: { method: "email_otp" } }),
+          ],
+        };
+      });
+
+      if (verificationError || !learnerSession) {
+        return json(response, 400, { error: verificationError || "Не удалось подтвердить код." });
+      }
+
+      const learner = nextLearningData.learners.find((item) => item.id === learnerSession.learnerId);
+      response.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "same-origin",
+        "Set-Cookie": createLearnerSessionCookie(learnerSession),
+      });
+      response.end(JSON.stringify({ ok: true, learner: { email: learner?.email || email }, courseUrl: launch.sourceUrl }));
+      return;
+    }
+
+    if (request.method === "POST" && action === "events") {
+      if (!checkRateLimit(request, "learning-events", LEARNING_EVENT_RATE_LIMIT)) {
+        return json(response, 429, { error: "Слишком много событий. Попробуйте позже." });
+      }
+      const learnerAccess = getLearnerSessionFromRequest(request, learningData, launch.id);
+      if (launch.accessMode !== "open" && !learnerAccess) {
+        return json(response, 401, { error: "Сначала подтвердите доступ к курсу." });
+      }
+      const body = await readRequestBody(request);
+      const events = Array.isArray(body.events) ? body.events : [body];
+      const nextEvents = events
+        .slice(0, 50)
+        .map((event) => createLearningEvent(launch, learnerAccess, { ...event, sessionId: body.sessionId || event.sessionId }))
+        .filter((event) => event.eventType);
+
+      await updateLearningData((currentData) => ({
+        ...currentData,
+        learners: learnerAccess
+          ? currentData.learners.map((learner) =>
+              learner.id === learnerAccess.learner.id ? { ...learner, lastSeenAt: new Date().toISOString() } : learner,
+            )
+          : currentData.learners,
+        sessions: learnerAccess
+          ? currentData.sessions.map((session) =>
+              session.id === learnerAccess.session.id ? { ...session, lastSeenAt: new Date().toISOString() } : session,
+            )
+          : currentData.sessions,
+        events: [...currentData.events, ...nextEvents],
+      }));
+      return json(response, 200, { ok: true, accepted: nextEvents.length });
+    }
+
+    if (request.method === "POST" && action === "logout") {
+      response.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Set-Cookie": clearLearnerSessionCookie(),
+      });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+  }
+
   if (request.method === "GET" && requestUrl.pathname === "/api/public/slots") {
     if (!checkRateLimit(request, "public-slots", PUBLIC_RATE_LIMIT)) {
       return json(response, 429, { error: "Слишком много запросов. Попробуйте позже." });
@@ -3524,6 +4060,51 @@ async function handleApi(request, requestUrl, response) {
 
   if (isAdminMutation(request, requestUrl) && !verifyCsrf(request)) {
     return json(response, 403, { error: "Некорректный CSRF-токен." });
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/course-launches/admin/overview") {
+    const learningData = await loadLearningData();
+    const launchSummaries = getLearningSummary(learningData);
+    return json(response, 200, {
+      launches: launchSummaries,
+      totals: {
+        launchesCount: learningData.launches.length,
+        learnersCount: new Set(learningData.events.map((event) => event.learnerId).filter(Boolean)).size,
+        eventsCount: learningData.events.length,
+        completedCount: learningData.events.filter((event) => event.eventType === "course_completed").length,
+      },
+    });
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/course-launches/admin/launches") {
+    const body = await readRequestBody(request);
+    const launch = normalizeCourseLaunch({
+      id: body.id,
+      title: body.title,
+      description: body.description,
+      courseId: body.courseId,
+      sourceUrl: body.sourceUrl,
+      accessMode: body.accessMode,
+      allowedEmails: String(body.allowedEmails || "")
+        .split(/[\s,;]+/)
+        .map((email) => email.trim())
+        .filter(Boolean),
+      allowedDomains: String(body.allowedDomains || "")
+        .split(/[\s,;]+/)
+        .map((domain) => domain.trim())
+        .filter(Boolean),
+      createdAt: body.createdAt || new Date().toISOString(),
+    });
+
+    if (!launch.sourceUrl || !/^https?:\/\/\S+$/i.test(launch.sourceUrl)) {
+      return json(response, 400, { error: "Укажите корректную ссылку на курс." });
+    }
+
+    const learningData = await updateLearningData((currentData) => ({
+      ...currentData,
+      launches: [...currentData.launches.filter((item) => item.id !== launch.id), launch],
+    }));
+    return json(response, 200, { launches: getLearningSummary(learningData) });
   }
 
   if (request.method === "GET" && requestUrl.pathname === "/api/config") {
@@ -3984,6 +4565,11 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === "/admin") {
       await serveFile(path.join(PUBLIC_DIR, "index.html"), response);
+      return;
+    }
+
+    if (/^\/learn\/[A-Za-z0-9_-]{1,80}$/.test(requestUrl.pathname)) {
+      await serveFile(path.join(PUBLIC_DIR, "course-launch.html"), response);
       return;
     }
 

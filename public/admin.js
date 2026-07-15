@@ -6,12 +6,21 @@ const employeeNameInput = document.querySelector("#employee-name");
 const employeePanelTitle = document.querySelector("#employee-panel-title");
 const loginView = document.querySelector("#login-view");
 const adminView = document.querySelector("#admin-view");
+const adminHomeView = document.querySelector("#admin-home-view");
+const adminMeetingsView = document.querySelector("#admin-meetings-view");
+const adminCourseDashboardView = document.querySelector("#admin-course-dashboard-view");
 const loginForm = document.querySelector("#login-form");
 const loginButton = document.querySelector("#login-button");
 const loginStatusNode = document.querySelector("#login-status");
 const adminUsernameInput = document.querySelector("#admin-username");
 const adminPasswordInput = document.querySelector("#admin-password");
 const logoutButton = document.querySelector("#logout-button");
+const homeLogoutButton = document.querySelector("#home-logout-button");
+const dashboardLogoutButton = document.querySelector("#dashboard-logout-button");
+const meetingsHomeButton = document.querySelector("#meetings-home-button");
+const dashboardsHomeButton = document.querySelector("#dashboards-home-button");
+const openMeetingsAdminButton = document.querySelector("#open-meetings-admin-button");
+const openCourseDashboardsButton = document.querySelector("#open-course-dashboards-button");
 const statusNode = document.querySelector("#status");
 const summaryNode = document.querySelector("#summary");
 const eventsSummaryNode = document.querySelector("#events-summary");
@@ -184,6 +193,32 @@ function setEmployeeActionStatus(message, kind = "") {
 function setAdminVisible(visible) {
   loginView.classList.toggle("hidden-panel", visible);
   adminView.classList.toggle("hidden-panel", !visible);
+  if (visible) {
+    showAdminHome();
+  }
+}
+
+function showAdminHome() {
+  adminHomeView.classList.remove("hidden-panel");
+  adminMeetingsView.classList.add("hidden-panel");
+  adminCourseDashboardView.classList.add("hidden-panel");
+  setStatus("", "");
+}
+
+function showMeetingsAdmin() {
+  adminHomeView.classList.add("hidden-panel");
+  adminMeetingsView.classList.remove("hidden-panel");
+  adminCourseDashboardView.classList.add("hidden-panel");
+}
+
+function showCourseDashboards() {
+  adminHomeView.classList.add("hidden-panel");
+  adminMeetingsView.classList.add("hidden-panel");
+  adminCourseDashboardView.classList.remove("hidden-panel");
+  setStatus("", "");
+  if (typeof window.refreshCourseDashboards === "function") {
+    window.refreshCourseDashboards();
+  }
 }
 
 function renderEmbedCode() {
@@ -970,6 +1005,12 @@ credentialsForm.addEventListener("submit", async (event) => {
 
 loginForm.addEventListener("submit", loginAdmin);
 logoutButton.addEventListener("click", logoutAdmin);
+homeLogoutButton.addEventListener("click", logoutAdmin);
+dashboardLogoutButton.addEventListener("click", logoutAdmin);
+meetingsHomeButton.addEventListener("click", showAdminHome);
+dashboardsHomeButton.addEventListener("click", showAdminHome);
+openMeetingsAdminButton.addEventListener("click", showMeetingsAdmin);
+openCourseDashboardsButton.addEventListener("click", showCourseDashboards);
 copyEmbedCodeButton.addEventListener("click", copyEmbedCode);
 refreshEmbedCodeButton.addEventListener("click", refreshEmbedCode);
 checkButton.addEventListener("click", checkSlots);
