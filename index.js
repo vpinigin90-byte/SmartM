@@ -76,7 +76,7 @@ const DEFAULT_COURSE_LAUNCHES = [
     sourceUrl: "https://go.scroll-tool.ru/share/9127c742-171d-495f-a4c5-e3f4649a9a74",
     accessMode: "email_otp",
     allowedEmails: ["demo@scrolltool.ru", "student@example.com"],
-    allowedDomains: ["scrolltool.ru"],
+    allowedDomains: ["scrolltool.ru", "scroll-tool.ru"],
     createdAt: "2026-07-16T00:00:00.000Z",
   },
 ];
@@ -970,8 +970,45 @@ function redirect(response, location) {
   response.end();
 }
 
-function isSmtpConfigured() {
-  return Boolean(SMTP_HOST && SMTP_FROM);
+function isSmtpConfigured(settings = null) {
+  const source = settings || {};
+  return Boolean((source.host || SMTP_HOST) && (source.from || SMTP_FROM));
+}
+
+async function resolveSmtpSettings() {
+  if (SMTP_HOST && SMTP_FROM) {
+    return {
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      user: SMTP_USER,
+      password: SMTP_PASSWORD,
+      from: SMTP_FROM,
+      fromName: SMTP_FROM_NAME,
+      timeoutMs: SMTP_TIMEOUT_MS,
+    };
+  }
+
+  const config = await loadConfig();
+  const employee = getActiveEmployee(config);
+  if (!employee?.email || !employee?.password) {
+    return null;
+  }
+
+  return {
+    host: "smtp.mail.ru",
+    port: 465,
+    secure: true,
+    user: employee.email,
+    password: employee.password,
+    from: employee.email,
+    fromName: SMTP_FROM_NAME,
+    timeoutMs: SMTP_TIMEOUT_MS,
+  };
+}
+
+async function hasSmtpSettings() {
+  return isSmtpConfigured(await resolveSmtpSettings());
 }
 
 function encodeMailHeader(value) {
@@ -1001,17 +1038,18 @@ function dotStuffSmtpMessage(message) {
 }
 
 async function sendSmtpMail({ to, subject, text, html }) {
-  if (!isSmtpConfigured()) {
+  const smtpSettings = await resolveSmtpSettings();
+  if (!isSmtpConfigured(smtpSettings)) {
     throw createHttpError("SMTP для отправки писем не настроен.", 503);
   }
 
   const recipient = normalizeMailAddress(to);
-  const fromAddress = normalizeMailAddress(SMTP_FROM);
+  const fromAddress = normalizeMailAddress(smtpSettings.from);
   const boundary = `scrolltool-${crypto.randomBytes(12).toString("hex")}`;
   const date = new Date().toUTCString();
   const messageId = `<${crypto.randomUUID()}@${new URL(PUBLIC_BASE_URL).hostname}>`;
   const headers = [
-    `From: ${encodeMailHeader(SMTP_FROM_NAME)} <${fromAddress}>`,
+    `From: ${encodeMailHeader(smtpSettings.fromName || SMTP_FROM_NAME)} <${fromAddress}>`,
     `To: <${recipient}>`,
     `Subject: ${encodeMailHeader(subject)}`,
     `Date: ${date}`,
@@ -1036,7 +1074,7 @@ async function sendSmtpMail({ to, subject, text, html }) {
   ];
   const message = `${headers.join("\r\n")}\r\n\r\n${body.join("\r\n")}`;
 
-  await withSmtpConnection(async (client) => {
+  await withSmtpConnection(smtpSettings, async (client) => {
     await client.command(`MAIL FROM:<${fromAddress}>`, [250]);
     await client.command(`RCPT TO:<${recipient}>`, [250, 251]);
     await client.command("DATA", [354]);
@@ -1045,23 +1083,23 @@ async function sendSmtpMail({ to, subject, text, html }) {
   });
 }
 
-function createSmtpTransport(secure) {
-  return secure
+function createSmtpTransport(settings) {
+  return settings.secure
     ? tls.connect({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        servername: SMTP_HOST,
-        timeout: SMTP_TIMEOUT_MS,
+        host: settings.host,
+        port: settings.port,
+        servername: settings.host,
+        timeout: settings.timeoutMs,
       })
     : net.connect({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        timeout: SMTP_TIMEOUT_MS,
+        host: settings.host,
+        port: settings.port,
+        timeout: settings.timeoutMs,
       });
 }
 
-async function withSmtpConnection(callback) {
-  let socket = createSmtpTransport(SMTP_SECURE);
+async function withSmtpConnection(settings, callback) {
+  let socket = createSmtpTransport(settings);
   let buffer = "";
   let pendingResolve = null;
   let pendingReject = null;
@@ -1106,7 +1144,7 @@ async function withSmtpConnection(callback) {
         pendingResolve = null;
         pendingReject = null;
         reject(new Error("SMTP response timeout"));
-      }, SMTP_TIMEOUT_MS);
+      }, settings.timeoutMs);
       pendingResolve = (response) => {
         clearTimeout(timer);
         resolve(response);
@@ -1137,15 +1175,15 @@ async function withSmtpConnection(callback) {
   try {
     await readResponse();
     let ehloResponse = await command(`EHLO ${new URL(PUBLIC_BASE_URL).hostname}`, [250]);
-    if (!SMTP_SECURE && /STARTTLS/im.test(ehloResponse)) {
+    if (!settings.secure && /STARTTLS/im.test(ehloResponse)) {
       await command("STARTTLS", [220]);
       socket.removeAllListeners();
       buffer = "";
       attach(
         tls.connect({
           socket,
-          servername: SMTP_HOST,
-          timeout: SMTP_TIMEOUT_MS,
+          servername: settings.host,
+          timeout: settings.timeoutMs,
         }),
       );
       await new Promise((resolve, reject) => {
@@ -1155,14 +1193,14 @@ async function withSmtpConnection(callback) {
       ehloResponse = await command(`EHLO ${new URL(PUBLIC_BASE_URL).hostname}`, [250]);
     }
 
-    if (SMTP_USER && SMTP_PASSWORD) {
-      const authPlain = Buffer.from(`\u0000${SMTP_USER}\u0000${SMTP_PASSWORD}`, "utf8").toString("base64");
+    if (settings.user && settings.password) {
+      const authPlain = Buffer.from(`\u0000${settings.user}\u0000${settings.password}`, "utf8").toString("base64");
       try {
         await command(`AUTH PLAIN ${authPlain}`, [235]);
       } catch {
         await command("AUTH LOGIN", [334]);
-        await command(Buffer.from(SMTP_USER, "utf8").toString("base64"), [334]);
-        await command(Buffer.from(SMTP_PASSWORD, "utf8").toString("base64"), [235]);
+        await command(Buffer.from(settings.user, "utf8").toString("base64"), [334]);
+        await command(Buffer.from(settings.password, "utf8").toString("base64"), [235]);
       }
     }
 
@@ -1283,7 +1321,11 @@ function canEmailAccessLaunch(email, launch) {
     return true;
   }
   const domain = normalizedEmail.split("@")[1];
-  return Boolean(domain && launch.allowedDomains.includes(domain));
+  const allowedDomains = new Set(launch.allowedDomains);
+  if (launch.id === "lidea-demo") {
+    allowedDomains.add("scroll-tool.ru");
+  }
+  return Boolean(domain && allowedDomains.has(domain));
 }
 
 function hashLearningOtp(launchId, email, code) {
@@ -4066,7 +4108,8 @@ async function handleApi(request, requestUrl, response) {
       if (canAccess && checkRateLimitForKey("learning-otp-email", `${launch.id}:${email}`, LEARNING_OTP_RATE_LIMIT)) {
         const code = createLearningOtpCode();
         devCode = code;
-        if (isSmtpConfigured()) {
+        const shouldSendEmail = isSmtpConfigured() || (IS_PRODUCTION && await hasSmtpSettings());
+        if (shouldSendEmail) {
           await sendLearningOtpEmail({ email, code, launch });
         } else if (IS_PRODUCTION) {
           return json(response, 503, { error: "Отправка e-mail пока не настроена." });
@@ -4830,10 +4873,6 @@ if (!process.env.ADMIN_PASSWORD) {
 
 if (!process.env.SESSION_SECRET) {
   console.warn("[Security] SESSION_SECRET is not set. Sessions will reset on server restart.");
-}
-
-if (IS_PRODUCTION && !isSmtpConfigured()) {
-  console.warn("[Learning] SMTP is not configured. Course OTP e-mails will not be sent.");
 }
 
 server.listen(PORT, HOST, () => {
