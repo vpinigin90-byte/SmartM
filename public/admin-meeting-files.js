@@ -3,7 +3,7 @@
   const uploadInput = document.querySelector("#meeting-files-upload");
   const listNode = document.querySelector("#meeting-files-list");
   const statusNode = document.querySelector("#meeting-files-status");
-  const maxBytes = 5 * 1024 * 1024;
+  const maxBytes = 25 * 1024 * 1024;
   let files = [];
   let hasLoaded = false;
 
@@ -59,7 +59,7 @@
   async function uploadFile(file, id = "") {
     if (!file) return;
     if (file.size > maxBytes) {
-      setLocalStatus("Размер файла должен быть не больше 5 МБ.", "error");
+      setLocalStatus("Размер файла должен быть не больше 25 МБ.", "error");
       return;
     }
     setLocalStatus(id ? "Заменяю файл..." : "Добавляю файл...");

@@ -35,7 +35,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const CSRF_HEADER = "x-csrf-token";
 const MASKED_SECRET = "********";
 const MAX_JSON_BODY_BYTES = Number(process.env.MAX_JSON_BODY_BYTES) || 1024 * 1024;
-const MAX_MEETING_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_MEETING_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_MEETING_FILES = 10;
 const MAX_PUBLIC_RANGE_DAYS = Number(process.env.MAX_PUBLIC_RANGE_DAYS) || 45;
 const MAX_ADMIN_RANGE_DAYS = Number(process.env.MAX_ADMIN_RANGE_DAYS) || 120;
@@ -4433,7 +4433,7 @@ async function handleApi(request, requestUrl, response) {
       await saveConfig(nextConfig);
       return json(response, 200, { files: nextConfig.meetingFiles.map(({ storedName, ...file }) => file) });
     } catch (error) {
-      return json(response, error.statusCode || 400, { error: error.statusCode === 413 ? "Размер файла должен быть не больше 5 МБ." : "Не удалось сохранить файл." });
+      return json(response, error.statusCode || 400, { error: error.statusCode === 413 ? "Размер файла должен быть не больше 25 МБ." : "Не удалось сохранить файл." });
     }
   }
 
