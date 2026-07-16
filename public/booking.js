@@ -293,6 +293,14 @@ function hasAvailableSlotsInMonth(monthStart) {
   });
 }
 
+function getFirstAvailableDayInMonth(monthStart) {
+  const month = startOfMonth(monthStart);
+  return [...state.slotsByDay.keys()].find((dayKey) => {
+    const day = new Date(dayKey);
+    return day.getFullYear() === month.getFullYear() && day.getMonth() === month.getMonth();
+  }) || null;
+}
+
 function formatDateTimeLabel(date) {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
@@ -361,6 +369,18 @@ function groupSlotsByDay(slots) {
 
 function renderDates() {
   if (state.isLoadingSlots) {
+    calendarPanel.classList.remove("hidden-panel");
+    selectedDatePanel.classList.remove("hidden-panel");
+    slotsPanel.classList.remove("hidden-panel");
+    calendarPanel.setAttribute("aria-busy", "true");
+    if (calendarMonthLabelNode) {
+      calendarMonthLabelNode.textContent = "Загружаем даты";
+    }
+    selectedDateSummaryNode.textContent = "Ищем доступное время";
+    datesNode.className = "calendar-grid calendar-grid-loading";
+    datesNode.innerHTML = Array.from({ length: 35 }, () => '<span class="calendar-loading-cell" aria-hidden="true"></span>').join("");
+    slotsNode.className = "time-grid time-grid-loading";
+    slotsNode.innerHTML = '<span class="time-loading-cell" aria-hidden="true"></span><span class="time-loading-cell" aria-hidden="true"></span>';
     if (calendarPrevButton) {
       calendarPrevButton.disabled = true;
       calendarPrevButton.classList.add("hidden-panel");
@@ -396,10 +416,10 @@ function renderDates() {
     return;
   }
 
-  const preferredMonth = state.selectedDayKey
-    ? startOfMonth(new Date(state.selectedDayKey))
-    : state.visibleMonthStart || startOfMonth(new Date());
+  const preferredMonth = state.visibleMonthStart
+    || (state.selectedDayKey ? startOfMonth(new Date(state.selectedDayKey)) : startOfMonth(new Date()));
   state.visibleMonthStart = clampMonthToBounds(preferredMonth, bounds);
+  calendarPanel.removeAttribute("aria-busy");
 
   if (calendarMonthLabelNode) {
     calendarMonthLabelNode.textContent = formatCalendarMonthLabel(state.visibleMonthStart);
@@ -420,42 +440,28 @@ function renderDates() {
   const monthStart = state.visibleMonthStart;
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
   const availableDays = new Set(state.slotsByDay.keys());
-  const rangeStart = getSlotsRange().start;
-  const rangeEnd = new Date(getSlotsRange().end);
   const todayStart = toLocalDayStart(new Date());
   const workingDays = new Set(state.meetingRules.workingDays);
-  rangeEnd.setDate(rangeEnd.getDate() - 1);
-  const leadingWeekStart = new Date(rangeStart);
-  leadingWeekStart.setDate(leadingWeekStart.getDate() - ((leadingWeekStart.getDay() + 6) % 7));
-  const firstVisibleDate = new Date(Math.max(monthStart.getTime(), leadingWeekStart.getTime()));
-  const lastVisibleDate = new Date(Math.min(monthEnd.getTime(), rangeEnd.getTime()));
-
-  if (firstVisibleDate > lastVisibleDate) {
-    datesNode.classList.add("empty");
-    datesNode.innerHTML = "<p>Свободных дат в этом месяце нет.</p>";
-    calendarPanel.classList.remove("hidden-panel");
-    return;
-  }
 
   const html = [];
-  let isFirstRenderedCell = true;
-  for (const cursor = new Date(firstVisibleDate); cursor <= lastVisibleDate; cursor.setDate(cursor.getDate() + 1)) {
+  const leadingEmptyCells = (monthStart.getDay() + 6) % 7;
+  for (let index = 0; index < leadingEmptyCells; index += 1) {
+    html.push('<span class="date-option-spacer" aria-hidden="true"></span>');
+  }
+
+  for (const cursor = new Date(monthStart); cursor <= monthEnd; cursor.setDate(cursor.getDate() + 1)) {
     const cellDate = new Date(cursor);
     const dayKey = toLocalDayStart(cellDate).toISOString();
-    const isPastDisplayOnly = cellDate < rangeStart;
+    const isPastDisplayOnly = cellDate < todayStart;
     const isSameDayDisabled =
       !state.meetingRules.allowSameDay && cellDate.getTime() === todayStart.getTime();
     const isWeekdayDisabled = !workingDays.has(cellDate.getDay());
     const isAvailable = availableDays.has(dayKey);
     const isDisabledDisplayOnly = isPastDisplayOnly || isSameDayDisabled || isWeekdayDisabled;
 
-    const columnStart = isFirstRenderedCell ? ((cellDate.getDay() + 6) % 7) + 1 : null;
-    const style = columnStart ? ` style="grid-column:${columnStart}"` : "";
-    isFirstRenderedCell = false;
-
     if (isDisabledDisplayOnly) {
       html.push(
-        `<span class="date-option is-disabled" aria-hidden="true"${style}><strong>${cellDate.getDate()}</strong></span>`,
+        `<span class="date-option is-disabled" aria-hidden="true"><strong>${cellDate.getDate()}</strong></span>`,
       );
       continue;
     }
@@ -470,7 +476,7 @@ function renderDates() {
     }
 
     html.push(
-      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}" data-has-slots="${isAvailable ? "1" : "0"}"${style}><strong>${cellDate.getDate()}</strong></button>`,
+      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}" data-has-slots="${isAvailable ? "1" : "0"}"${isAvailable ? "" : " disabled"}><strong>${cellDate.getDate()}</strong></button>`,
     );
   }
 
@@ -481,7 +487,7 @@ function renderDates() {
     return;
   }
 
-  datesNode.classList.remove("empty");
+  datesNode.className = "calendar-grid";
   calendarPanel.classList.remove("hidden-panel");
   datesNode.innerHTML = html.join("");
 }
@@ -534,11 +540,16 @@ async function loadSlots() {
     state.slots = payload.slots || [];
     state.slotsByDay = groupSlotsByDay(state.slots);
     state.meetingRules = normalizeMeetingRules(payload.meetingRules || {});
-    state.selectedDayKey = null;
+    state.selectedDayKey = state.slots.length
+      ? toLocalDayStart(new Date(state.slots[0].start)).toISOString()
+      : null;
+    state.visibleMonthStart = state.selectedDayKey
+      ? startOfMonth(new Date(state.selectedDayKey))
+      : null;
     state.selectedSlot = null;
     state.isLoadingSlots = false;
     resetSelection(false);
-    setStep("date");
+    setStep(state.selectedDayKey ? "time" : "date");
     renderDates();
     renderSlotsForSelectedDate();
   } catch (error) {
@@ -827,8 +838,11 @@ if (calendarPrevButton) {
     if (!bounds || !state.visibleMonthStart) {
       return;
     }
-    state.visibleMonthStart = clampMonthToBounds(addMonths(state.visibleMonthStart, -1), bounds);
+    const nextMonth = clampMonthToBounds(addMonths(state.visibleMonthStart, -1), bounds);
+    state.visibleMonthStart = nextMonth;
+    state.selectedDayKey = getFirstAvailableDayInMonth(nextMonth);
     renderDates();
+    renderSlotsForSelectedDate();
   });
 }
 if (calendarNextButton) {
@@ -837,8 +851,11 @@ if (calendarNextButton) {
     if (!bounds || !state.visibleMonthStart) {
       return;
     }
-    state.visibleMonthStart = clampMonthToBounds(addMonths(state.visibleMonthStart, 1), bounds);
+    const nextMonth = clampMonthToBounds(addMonths(state.visibleMonthStart, 1), bounds);
+    state.visibleMonthStart = nextMonth;
+    state.selectedDayKey = getFirstAvailableDayInMonth(nextMonth);
     renderDates();
+    renderSlotsForSelectedDate();
   });
 }
 changeTimeButton.addEventListener("click", () => {

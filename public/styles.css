@@ -439,6 +439,7 @@ body.booking-page.embedded-booking .booking-shell {
 .calendar-nav {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 16px;
 }
 
@@ -453,9 +454,18 @@ body.booking-page.embedded-booking .booking-shell {
   background: var(--secondary);
   color: var(--booking-muted-text-color);
   font-size: 34px;
-  line-height: 1;
+  line-height: 40px;
   font-weight: 300;
   box-shadow: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.calendar-nav-button span {
+  display: block;
+  line-height: 1;
+  pointer-events: none;
+  transform: translateY(-1px);
 }
 
 .calendar-nav-button:hover:not(:disabled) {
@@ -501,6 +511,33 @@ body.booking-page.embedded-booking .booking-shell {
 .calendar-grid.empty p,
 .time-grid.empty p {
   margin: 0;
+}
+
+.calendar-grid-loading {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-loading-cell,
+.time-loading-cell {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.calendar-loading-cell {
+  aspect-ratio: 1;
+  min-height: 48px;
+}
+
+.time-grid-loading {
+  display: grid;
+  gap: 12px;
+}
+
+.time-loading-cell {
+  min-height: 88px;
+  border-radius: 8px;
 }
 
 .date-option {

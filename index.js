@@ -3589,7 +3589,7 @@ function normalizeAdditionalAttendees(value, clientEmail) {
   return attendees;
 }
 
-function normalizeBookingPayload(body) {
+function normalizeBookingPayload(body, rules) {
   const clientName = String(body.clientName || body.name || "").trim();
   const clientEmail = String(body.clientEmail || body.email || "").trim();
   const clientPhone = String(body.clientPhone || body.phone || "").trim();
@@ -3599,8 +3599,6 @@ function normalizeBookingPayload(body) {
   const start = String(body.start || body.startIso || "").trim();
   const end = String(body.end || body.endIso || "").trim();
   const comment = String(body.comment || "").trim();
-  const rules = getPublicSlotRules(body);
-
   if (!clientName || !clientEmail || !clientPhone || !companyName) {
     const error = new Error("Missing client fields");
     error.statusCode = 400;
@@ -3659,7 +3657,7 @@ async function getPublicSlots(rangeStartIso, rangeEndIso, rules = {}) {
   );
   const slotsByKey = new Map();
 
-  for (const employee of employees) {
+  const employeeSlots = await Promise.all(employees.map(async (employee) => {
     try {
       const result = await fetchBusyIntervals(employee.email, employee.password, rangeStartIso, rangeEndIso);
       const employeeSlots = filterMeetingSlotsByRules(
@@ -3673,32 +3671,43 @@ async function getPublicSlots(rangeStartIso, rangeEndIso, rules = {}) {
         rules,
       );
 
-      for (const slot of employeeSlots) {
-        if (!slotsByKey.has(slotKey(slot))) {
-          slotsByKey.set(slotKey(slot), slot);
-        }
-      }
+      return employeeSlots;
     } catch {
       // Public availability should degrade quietly when one employee calendar is unavailable.
+      return [];
+    }
+  }));
+
+  for (const slots of employeeSlots) {
+    for (const slot of slots) {
+      if (!slotsByKey.has(slotKey(slot))) {
+        slotsByKey.set(slotKey(slot), slot);
+      }
     }
   }
 
   return [...slotsByKey.values()].sort((left, right) => new Date(left.start) - new Date(right.start));
 }
 
-async function findEmployeeForBooking(startIso, endIso, rules = {}) {
-  const config = await loadConfig();
-  const employees = sortEmployeesForBooking(config.employees).filter(
+async function findEmployeeForBooking(startIso, endIso, rules = {}, config = null) {
+  const currentConfig = config || await loadConfig();
+  const employees = sortEmployeesForBooking(currentConfig.employees).filter(
     (employee) => employee.email && employee.password,
   );
 
   for (const employee of employees) {
     try {
-      const result = await fetchBusyIntervals(employee.email, employee.password, startIso, endIso);
+      const bufferedRangeStart = new Date(new Date(startIso).getTime() - PUBLIC_DEMO_GAP_MINUTES * 60 * 1000).toISOString();
+      const result = await fetchBusyIntervals(employee.email, employee.password, bufferedRangeStart, endIso);
       const hasOverlap = result.busy.some((interval) =>
         intervalsOverlap(interval.start, interval.end, startIso, endIso),
       );
-      if (hasOverlap || !isSlotAllowedByRules(startIso, endIso, rules)) {
+      const violatesPostMeetingGap = result.busy.some((interval) => {
+        const intervalEnd = new Date(interval.end).getTime();
+        const slotStart = new Date(startIso).getTime();
+        return slotStart >= intervalEnd && slotStart < intervalEnd + PUBLIC_DEMO_GAP_MINUTES * 60 * 1000;
+      });
+      if (hasOverlap || violatesPostMeetingGap || !isSlotAllowedByRules(startIso, endIso, rules)) {
         continue;
       }
 
@@ -3779,16 +3788,16 @@ async function syncMeetingRegistry(config) {
   return { config: nextConfig, registry, syncError: null };
 }
 
-async function createPublicBooking(booking) {
-  const config = await loadConfig();
-  const target = await findEmployeeForBooking(booking.start, booking.end, booking.rules);
+async function createPublicBooking(booking, config = null) {
+  const currentConfig = config || await loadConfig();
+  const target = await findEmployeeForBooking(booking.start, booking.end, booking.rules, currentConfig);
   if (!target) {
     const error = new Error("No available employee");
     error.statusCode = 409;
     throw error;
   }
 
-  const mtsLinkSettings = config.mtsLink || normalizeMtsLinkSettings();
+  const mtsLinkSettings = currentConfig.mtsLink || normalizeMtsLinkSettings();
   let mtsLinkMeeting = null;
 
   if (mtsLinkSettings.enabled) {
@@ -3850,7 +3859,7 @@ async function createPublicBooking(booking) {
     }
   }
 
-  const attachments = config.meetingFiles.map((file) => ({
+  const attachments = currentConfig.meetingFiles.map((file) => ({
     ...file,
     url: getMeetingFileDownloadUrl(file),
   }));
@@ -4321,12 +4330,13 @@ async function handleApi(request, requestUrl, response) {
     try {
       const body = await readRequestBody(request);
       assertHoneypotIsEmpty(body);
-      const booking = normalizeBookingPayload(body);
+      const config = await loadConfig();
+      const booking = normalizeBookingPayload(body, getPublicSlotRules(config.meetingRules));
       if (!checkRateLimitForKey("public-bookings-email", booking.clientEmail.toLowerCase(), PUBLIC_BOOKING_EMAIL_RATE_LIMIT)) {
         throw createHttpError("Too many booking attempts for email", 429);
       }
       assertPublicBookingNotDuplicate(request, booking);
-      const result = await createPublicBooking(booking);
+      const result = await createPublicBooking(booking, config);
       return json(response, 201, result);
     } catch (error) {
       return handlePublicError(response, error);
