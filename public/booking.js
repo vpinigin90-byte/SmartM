@@ -23,6 +23,7 @@ const clientLastNameInput = document.querySelector("#client-last-name");
 const clientEmailInput = document.querySelector("#client-email");
 const clientPhoneCountryInput = document.querySelector("#client-phone-country");
 const clientPhoneInput = document.querySelector("#client-phone");
+const clientTelegramInput = document.querySelector("#client-telegram");
 const companyNameInput = document.querySelector("#company-name");
 const positionSelect = document.querySelector("#client-position");
 const customPositionInput = document.querySelector("#custom-position");
@@ -37,6 +38,8 @@ const bookingSuccessModal = document.querySelector("#booking-success-modal");
 const bookingSuccessBackdrop = document.querySelector("#booking-success-backdrop");
 const bookingSuccessCloseButton = document.querySelector("#booking-success-close");
 const bookingSuccessMessageNode = document.querySelector("#booking-success-message");
+const bookingTelegramReminderNode = document.querySelector("#booking-telegram-reminder");
+const bookingTelegramReminderLink = document.querySelector("#booking-telegram-reminder-link");
 const stepIndicators = [...document.querySelectorAll("[data-step-indicator]")];
 const urlParams = new URLSearchParams(window.location.search);
 const isEmbedded = urlParams.get("embed") === "1";
@@ -69,6 +72,7 @@ const FIELD_ERRORS = {
   lastName: document.querySelector("#client-last-name-error"),
   email: document.querySelector("#client-email-error"),
   phone: document.querySelector("#client-phone-error"),
+  telegram: document.querySelector("#client-telegram-error"),
   company: document.querySelector("#company-name-error"),
   position: document.querySelector("#client-position-error"),
   customPosition: document.querySelector("#custom-position-error"),
@@ -124,6 +128,17 @@ function validatePhoneField() {
   return !error;
 }
 
+function validateTelegramField() {
+  const value = clientTelegramInput?.value.trim().replace(/^@+/, "") || "";
+  const error = !value || /^[A-Za-z0-9_]{5,32}$/.test(value)
+    ? ""
+    : "Укажите корректный Telegram username.";
+  if (clientTelegramInput) {
+    setFieldState(clientTelegramInput, FIELD_ERRORS.telegram, error);
+  }
+  return !error;
+}
+
 function validatePositionField() {
   setFieldState(positionSelect, FIELD_ERRORS.position, "");
   positionSelect.closest(".field")?.classList.remove("invalid");
@@ -145,6 +160,7 @@ function validateBookingForm() {
     () => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию."),
     validateEmailField,
     validatePhoneField,
+    validateTelegramField,
     () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."),
     validateCustomPositionField,
   ];
@@ -185,7 +201,7 @@ function notifyParentHeight() {
   window.parent.postMessage({ type: "scrolltool-booking-resize", height }, "*");
 }
 
-function setBookingSuccessModal(open, message = "") {
+function setBookingSuccessModal(open, message = "", options = {}) {
   if (!bookingSuccessModal) {
     return;
   }
@@ -195,6 +211,12 @@ function setBookingSuccessModal(open, message = "") {
   if (open && bookingSuccessMessageNode && message) {
     bookingSuccessMessageNode.textContent = message;
   }
+  const telegramReminderUrl = options.telegramReminderUrl || "";
+  if (bookingTelegramReminderNode && bookingTelegramReminderLink) {
+    bookingTelegramReminderNode.classList.toggle("hidden-panel", !open || !telegramReminderUrl);
+    bookingTelegramReminderLink.href = telegramReminderUrl || "#";
+  }
+  requestAnimationFrame(notifyParentHeight);
 }
 
 function setStep(stepName) {
@@ -844,7 +866,7 @@ async function submitBooking(event) {
   setStatus("Бронируем встречу...", "");
 
   try {
-    await apiRequest("/api/public/bookings", {
+    const result = await apiRequest("/api/public/bookings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -853,6 +875,7 @@ async function submitBooking(event) {
         clientName: getClientFullName(),
         clientEmail: clientEmailInput.value.trim(),
         clientPhone: getPhoneValueForSubmit(),
+        clientTelegram: clientTelegramInput?.value.trim() || "",
         companyName: companyNameInput.value.trim(),
         position,
         additionalAttendees: additionalAttendeesInput.value.trim(),
@@ -864,7 +887,7 @@ async function submitBooking(event) {
 
     resetSelection();
     setStatus("", "");
-    setBookingSuccessModal(true);
+    setBookingSuccessModal(true, "", { telegramReminderUrl: result.telegramReminderUrl || "" });
     loadSlots().catch((error) => {
       setStatus(error.message || "Не удалось обновить доступные слоты.", "error");
     });
@@ -955,6 +978,10 @@ clientPhoneInput.addEventListener("input", () => {
   applyPhoneMask(clientPhoneInput.value);
   validateAfterSubmit(validatePhoneField);
 });
+if (clientTelegramInput) {
+  clientTelegramInput.addEventListener("input", () => validateAfterSubmit(validateTelegramField));
+  clientTelegramInput.addEventListener("blur", () => validateAfterSubmit(validateTelegramField));
+}
 clientFirstNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
 clientFirstNameInput.addEventListener("input", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
 clientLastNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию.")));

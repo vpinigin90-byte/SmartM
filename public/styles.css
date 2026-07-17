@@ -1747,6 +1747,54 @@ body.modal-open {
   line-height: 1.6;
 }
 
+.booking-telegram-reminder {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  color: var(--booking-success-modal-text-color);
+  font-family: "Mulish", "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.booking-telegram-reminder.hidden-panel {
+  display: none;
+}
+
+.booking-telegram-reminder a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font: inherit;
+  text-decoration: none;
+}
+
+.booking-telegram-reminder a::before {
+  width: 34px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  box-shadow: inset 14px 0 0 currentColor;
+  content: "";
+}
+
+.booking-telegram-reminder a:hover,
+.booking-telegram-reminder a:focus-visible {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #0b0d0e;
+  outline: none;
+}
+
 .booking-modal-button {
   width: 100%;
   margin-top: 20px;
@@ -2623,6 +2671,11 @@ body.modal-open {
   grid-row: 5;
 }
 
+#booking-form-panel .contact-telegram-field {
+  grid-column: 1;
+  grid-row: 6;
+}
+
 #booking-form-panel .company-name-field {
   grid-column: 2;
   grid-row: 2;
@@ -2945,31 +2998,35 @@ body.modal-open {
   }
 
   #booking-form-panel .booking-form-company-title {
+    order: 7;
+  }
+
+  #booking-form-panel .contact-telegram-field {
     order: 6;
   }
 
   #booking-form-panel .company-name-field {
-    order: 7;
-  }
-
-  #booking-form-panel .position-field {
     order: 8;
   }
 
-  #booking-form-panel .additional-attendees-field {
+  #booking-form-panel .position-field {
     order: 9;
   }
 
-  #booking-form-panel .comment-field {
+  #booking-form-panel .additional-attendees-field {
     order: 10;
   }
 
-  .booking-form-actions-bottom {
+  #booking-form-panel .comment-field {
     order: 11;
   }
 
-  #booking-form-panel .booking-consent {
+  .booking-form-actions-bottom {
     order: 12;
+  }
+
+  #booking-form-panel .booking-consent {
+    order: 13;
   }
 
   #booking-form-panel .additional-attendees-field,

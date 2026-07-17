@@ -112,6 +112,12 @@
                 <small id="client-phone-error" class="field-error" aria-live="polite"></small>
               </label>
 
+              <label class="field contact-telegram-field">
+                <span class="field-label">Telegram</span>
+                <input id="client-telegram" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Telegram" />
+                <small id="client-telegram-error" class="field-error" aria-live="polite"></small>
+              </label>
+
               <label class="field company-name-field">
                 <span class="field-label">Наименование компании *</span>
                 <input id="company-name" type="text" autocomplete="organization" placeholder="Наименование компании *" required />
@@ -176,6 +182,10 @@
         <p id="booking-success-message">
           Проверьте свой календарь или&nbsp;уведомления в&nbsp;вашем почтовом ящике.
         </p>
+        <div id="booking-telegram-reminder" class="booking-telegram-reminder hidden-panel">
+          <span>Напомнить о&nbsp;встрече в&nbsp;Telegram</span>
+          <a id="booking-telegram-reminder-link" href="#" target="_blank" rel="noopener noreferrer">Подключить напоминания</a>
+        </div>
       </div>
     </div>
 

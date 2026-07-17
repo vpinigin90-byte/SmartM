@@ -59,6 +59,12 @@ const rateLimitBuckets = new Map();
 const publicBookingDuplicates = new Map();
 const PUBLIC_DEMO_DURATION_MINUTES = 60;
 const PUBLIC_DEMO_GAP_MINUTES = 30;
+const TELEGRAM_REMINDER_CHECK_MS = 60 * 1000;
+const TELEGRAM_REMINDER_OFFSETS = [
+  { key: "3d", label: "за 3 дня", ms: 3 * 24 * 60 * 60 * 1000 },
+  { key: "1d", label: "за 1 день", ms: 24 * 60 * 60 * 1000 },
+  { key: "1h", label: "за 1 час", ms: 60 * 60 * 1000 },
+];
 const DEFAULT_SLOT_RULES = {
   workingDays: [1, 2, 3, 4, 5],
   allowSameDay: false,
@@ -779,6 +785,28 @@ function normalizeTelegramBotUsername(value) {
   return username ? `@${username}` : "";
 }
 
+function normalizeTelegramUserHandle(value, { required = false } = {}) {
+  const username = String(value || "").trim().replace(/^@+/, "");
+  if (!username) {
+    if (required) {
+      throw createHttpError("Укажите Telegram username.", 400);
+    }
+    return "";
+  }
+  if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) {
+    throw createHttpError("Укажите корректный Telegram username.", 400);
+  }
+  return `@${username}`;
+}
+
+function safeNormalizeTelegramUserHandle(value) {
+  try {
+    return normalizeTelegramUserHandle(value);
+  } catch {
+    return "";
+  }
+}
+
 function createTelegramSecret() {
   return crypto.randomBytes(24).toString("base64url");
 }
@@ -850,6 +878,45 @@ function normalizeMeetingRegistry(source = []) {
     .slice(-500);
 }
 
+function normalizeTelegramReminderRecords(source = []) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((record) => ({
+      id: String(record?.id || "").trim(),
+      tokenHash: String(record?.tokenHash || "").trim(),
+      status: ["pending", "active", "cancelled"].includes(record?.status) ? record.status : "pending",
+      uid: String(record?.uid || "").trim() || null,
+      eventUrl: String(record?.eventUrl || "").trim() || null,
+      title: String(record?.title || "").trim().slice(0, 300) || "Встреча Scrolltool",
+      start: String(record?.start || "").trim(),
+      end: String(record?.end || "").trim(),
+      clientName: String(record?.clientName || "").trim().slice(0, 120),
+      clientEmail: normalizeEmailAddress(record?.clientEmail || ""),
+      clientPhone: String(record?.clientPhone || "").trim().slice(0, 60),
+      clientTelegram: safeNormalizeTelegramUserHandle(record?.clientTelegram || ""),
+      clientChatId: record?.clientChatId === undefined || record?.clientChatId === null ? null : String(record.clientChatId).trim().slice(0, 80),
+      clientChatUsername: safeNormalizeTelegramUserHandle(record?.clientChatUsername || ""),
+      companyName: String(record?.companyName || "").trim().slice(0, 160),
+      meetingUrl: String(record?.meetingUrl || "").trim() || null,
+      createdAt: String(record?.createdAt || "").trim() || null,
+      connectedAt: String(record?.connectedAt || "").trim() || null,
+      lastMessageAt: String(record?.lastMessageAt || "").trim() || null,
+      reminders: Array.isArray(record?.reminders)
+        ? record.reminders.map((reminder) => ({
+            key: String(reminder?.key || "").trim(),
+            dueAt: String(reminder?.dueAt || "").trim(),
+            clientSentAt: String(reminder?.clientSentAt || "").trim() || null,
+            adminSentAt: String(reminder?.adminSentAt || "").trim() || null,
+            skippedAt: String(reminder?.skippedAt || "").trim() || null,
+            clientError: String(reminder?.clientError || "").trim().slice(0, 300),
+            adminError: String(reminder?.adminError || "").trim().slice(0, 300),
+          })).filter((reminder) => TELEGRAM_REMINDER_OFFSETS.some((offset) => offset.key === reminder.key) && reminder.dueAt)
+        : [],
+    }))
+    .filter((record) => /^[A-Za-z0-9_-]{16,80}$/.test(record.id) && record.tokenHash && record.start && record.end)
+    .slice(-1000);
+}
+
 function normalizeConfig(config = {}) {
   let employees = [];
   let activeEmployeeId = null;
@@ -890,6 +957,7 @@ function normalizeConfig(config = {}) {
     telegram: normalizeTelegramSettings(config.telegram || {}),
     meetingFiles: normalizeMeetingFiles(config.meetingFiles),
     meetingRegistry: normalizeMeetingRegistry(config.meetingRegistry),
+    telegramReminders: normalizeTelegramReminderRecords(config.telegramReminders),
   };
 }
 
@@ -1740,8 +1808,9 @@ function sanitizeTelegramForAdmin(settings = {}) {
 
 function sanitizeConfigForAdmin(config) {
   const normalized = normalizeConfig(config);
+  const { telegramReminders, ...safeConfig } = normalized;
   return {
-    ...normalized,
+    ...safeConfig,
     employees: normalized.employees.map(sanitizeEmployeeForAdmin),
     mtsLink: sanitizeMtsLinkForAdmin(normalized.mtsLink),
     telegram: sanitizeTelegramForAdmin(normalized.telegram),
@@ -3675,6 +3744,7 @@ function normalizeBookingPayload(body, rules) {
   const clientName = String(body.clientName || body.name || "").trim();
   const clientEmail = String(body.clientEmail || body.email || "").trim();
   const clientPhone = String(body.clientPhone || body.phone || "").trim();
+  const clientTelegram = normalizeTelegramUserHandle(body.clientTelegram || body.telegram || "");
   const companyName = String(body.companyName || body.company || "").trim();
   const position = String(body.position || body.clientPosition || "").trim();
   const additionalAttendees = normalizeAdditionalAttendees(body.additionalAttendees, clientEmail);
@@ -3722,6 +3792,7 @@ function normalizeBookingPayload(body, rules) {
     clientName,
     clientEmail,
     clientPhone,
+    clientTelegram,
     companyName,
     position,
     additionalAttendees,
@@ -3870,6 +3941,138 @@ async function syncMeetingRegistry(config) {
   return { config: nextConfig, registry, syncError: null };
 }
 
+function createTelegramReminderToken() {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+function hashTelegramReminderToken(token) {
+  return crypto.createHash("sha256").update(`telegram-booking-reminder:${token}`).digest("base64url");
+}
+
+function getTelegramBotStartUrl(settings, startPayload) {
+  const username = normalizeTelegramBotUsername(settings.botUsername).replace(/^@/, "");
+  if (!username || !startPayload) {
+    return null;
+  }
+  return `https://t.me/${encodeURIComponent(username)}?start=${encodeURIComponent(startPayload)}`;
+}
+
+function createTelegramReminderLink(booking, eventData, settings) {
+  if (!settings?.enabled || !normalizeTelegramBotUsername(settings.botUsername)) {
+    return null;
+  }
+  const token = createTelegramReminderToken();
+  const startPayload = `booking_${token}`;
+  const url = getTelegramBotStartUrl(settings, startPayload);
+  if (!url) {
+    return null;
+  }
+  const now = new Date().toISOString();
+  const startMs = new Date(booking.start).getTime();
+  return {
+    url,
+    record: {
+      id: crypto.randomUUID(),
+      tokenHash: hashTelegramReminderToken(token),
+      status: "pending",
+      uid: eventData.uid,
+      eventUrl: eventData.eventUrl,
+      title: eventData.title,
+      start: booking.start,
+      end: booking.end,
+      clientName: booking.clientName,
+      clientEmail: booking.clientEmail,
+      clientPhone: booking.clientPhone,
+      clientTelegram: booking.clientTelegram,
+      clientChatId: null,
+      clientChatUsername: "",
+      companyName: booking.companyName,
+      meetingUrl: eventData.meetingUrl || null,
+      createdAt: now,
+      connectedAt: null,
+      lastMessageAt: null,
+      reminders: TELEGRAM_REMINDER_OFFSETS.map((offset) => ({
+        key: offset.key,
+        dueAt: new Date(startMs - offset.ms).toISOString(),
+        clientSentAt: null,
+        adminSentAt: null,
+        skippedAt: null,
+        clientError: "",
+        adminError: "",
+      })),
+    },
+  };
+}
+
+function formatTelegramMeetingRange(record) {
+  const start = new Date(record.start);
+  const end = new Date(record.end);
+  const date = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(start);
+  const startTime = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(start);
+  const endTime = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(end);
+  return `${date}, ${startTime}–${endTime}`;
+}
+
+function buildTelegramClientConfirmation(record) {
+  const lines = [
+    "У вас запланирована встреча Scrolltool.",
+    formatTelegramMeetingRange(record),
+  ];
+  if (record.meetingUrl) {
+    lines.push(`Ссылка на встречу: ${record.meetingUrl}`);
+  }
+  lines.push("Я напомню о встрече за 3 дня, за 1 день и за 1 час.");
+  return lines.join("\n");
+}
+
+function buildTelegramClientReminder(record, offset) {
+  const lines = [
+    `Напоминание о встрече ${offset.label}.`,
+    formatTelegramMeetingRange(record),
+  ];
+  if (record.meetingUrl) {
+    lines.push(`Ссылка на встречу: ${record.meetingUrl}`);
+  }
+  return lines.join("\n");
+}
+
+function buildTelegramAdminReminder(record, offset) {
+  return [
+    `Напоминание администратору: встреча ${offset.label}.`,
+    formatTelegramMeetingRange(record),
+    `Клиент: ${record.clientName || "не указан"}`,
+    `E-mail: ${record.clientEmail || "не указан"}`,
+    record.clientPhone ? `Телефон: ${record.clientPhone}` : "",
+    record.clientTelegram ? `Telegram: ${record.clientTelegram}` : "",
+    record.companyName ? `Компания: ${record.companyName}` : "",
+    record.meetingUrl ? `Ссылка MTS Link: ${record.meetingUrl}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+async function sendTelegramMessage(settings, chatId, text) {
+  if (!settings?.enabled || !chatId || !text) {
+    return null;
+  }
+  return callTelegramApi(settings, "sendMessage", {
+    chat_id: chatId,
+    text,
+    disable_web_page_preview: true,
+  });
+}
+
 async function createPublicBooking(booking, config = null) {
   const currentConfig = config || await loadConfig();
   const target = await findEmployeeForBooking(booking.start, booking.end, booking.rules, currentConfig);
@@ -3920,6 +4123,7 @@ async function createPublicBooking(booking, config = null) {
     booking.clientName,
     `Email: ${booking.clientEmail}`,
     `Телефон: ${booking.clientPhone}`,
+    booking.clientTelegram ? `Telegram: ${booking.clientTelegram}` : "",
     booking.companyName ? `Компания: ${booking.companyName}` : "",
     booking.position ? `Должность: ${booking.position}` : "",
     booking.additionalAttendees.length
@@ -3980,11 +4184,23 @@ async function createPublicBooking(booking, config = null) {
     attendees: [booking.clientEmail, ...booking.additionalAttendees],
     description,
   };
+  const telegramReminder = createTelegramReminderLink(booking, {
+    uid,
+    eventUrl,
+    title: registryEvent.summary,
+    meetingUrl: mtsLinkMeeting?.meetingUrl || null,
+  }, currentConfig.telegram);
   await updateConfig((currentConfig) => {
     const entry = mapCalendarEventToRegistry(registryEvent, target.employee.email);
     entry.source = "api";
     entry.mtsLink = mtsLinkMeeting ? { eventId: mtsLinkMeeting.eventId, eventSessionId: mtsLinkMeeting.eventSessionId } : null;
-    return { ...currentConfig, meetingRegistry: [...currentConfig.meetingRegistry.filter((item) => item.id !== entry.id), entry] };
+    return {
+      ...currentConfig,
+      meetingRegistry: [...currentConfig.meetingRegistry.filter((item) => item.id !== entry.id), entry],
+      telegramReminders: telegramReminder
+        ? [...currentConfig.telegramReminders.filter((item) => item.uid !== uid), telegramReminder.record]
+        : currentConfig.telegramReminders,
+    };
   });
 
   return {
@@ -3996,6 +4212,7 @@ async function createPublicBooking(booking, config = null) {
     meetingId: mtsLinkMeeting?.meetingId || null,
     eventSessionId: mtsLinkMeeting?.eventSessionId || null,
     provider: mtsLinkMeeting ? "mts-link" : null,
+    telegramReminderUrl: telegramReminder?.url || null,
   };
 }
 
@@ -4154,6 +4371,156 @@ async function testTelegramConnection(settings) {
   };
 }
 
+async function activateTelegramBookingReminder(settings, token, message) {
+  const chatId = message?.chat?.id;
+  if (!chatId || !token) {
+    return;
+  }
+  const tokenHash = hashTelegramReminderToken(token);
+  const now = new Date().toISOString();
+  let activatedRecord = null;
+
+  const nextConfig = await updateConfig((currentConfig) => {
+    const telegramReminders = currentConfig.telegramReminders.map((record) => {
+      if (record.tokenHash !== tokenHash || record.status === "cancelled") {
+        return record;
+      }
+      const nextRecord = {
+        ...record,
+        status: "active",
+        clientChatId: String(chatId),
+        clientChatUsername: safeNormalizeTelegramUserHandle(message?.from?.username || record.clientTelegram),
+        connectedAt: record.connectedAt || now,
+        lastMessageAt: now,
+        reminders: record.reminders.map((reminder) => (
+          Date.parse(reminder.dueAt) <= Date.now()
+            ? { ...reminder, skippedAt: reminder.skippedAt || now }
+            : reminder
+        )),
+      };
+      activatedRecord = nextRecord;
+      return nextRecord;
+    });
+
+    return {
+      ...currentConfig,
+      telegram: {
+        ...currentConfig.telegram,
+        lastWebhookAt: now,
+      },
+      telegramReminders,
+    };
+  });
+
+  if (!activatedRecord) {
+    await sendTelegramMessage(nextConfig.telegram, chatId, "Не получилось найти встречу для этой ссылки. Возможно, ссылка устарела.");
+    return;
+  }
+
+  await sendTelegramMessage(nextConfig.telegram, chatId, buildTelegramClientConfirmation(activatedRecord));
+  if (nextConfig.telegram.adminChatId) {
+    await sendTelegramMessage(nextConfig.telegram, nextConfig.telegram.adminChatId, [
+      "Клиент подключил Telegram-напоминания.",
+      formatTelegramMeetingRange(activatedRecord),
+      `Клиент: ${activatedRecord.clientName || "не указан"}`,
+      activatedRecord.clientTelegram ? `Telegram: ${activatedRecord.clientTelegram}` : "",
+    ].filter(Boolean).join("\n"));
+  }
+}
+
+let telegramReminderQueueRunning = false;
+
+function getDueTelegramReminderTasks(config) {
+  const nowMs = Date.now();
+  const settings = config.telegram || {};
+  if (!settings.enabled) {
+    return [];
+  }
+  const tasks = [];
+  for (const record of config.telegramReminders || []) {
+    if (record.status !== "active" || !record.clientChatId || Date.parse(record.start) <= nowMs) {
+      continue;
+    }
+    for (const reminder of record.reminders || []) {
+      if (reminder.skippedAt || Date.parse(reminder.dueAt) > nowMs) {
+        continue;
+      }
+      const offset = TELEGRAM_REMINDER_OFFSETS.find((item) => item.key === reminder.key);
+      if (!offset) {
+        continue;
+      }
+      if (!reminder.clientSentAt) {
+        tasks.push({ target: "client", recordId: record.id, reminderKey: reminder.key, chatId: record.clientChatId, text: buildTelegramClientReminder(record, offset) });
+      }
+      if (settings.adminChatId && !reminder.adminSentAt) {
+        tasks.push({ target: "admin", recordId: record.id, reminderKey: reminder.key, chatId: settings.adminChatId, text: buildTelegramAdminReminder(record, offset) });
+      }
+    }
+  }
+  return tasks;
+}
+
+function updateTelegramReminderSendState(record, task, patch) {
+  return {
+    ...record,
+    lastMessageAt: patch.sentAt || record.lastMessageAt,
+    reminders: record.reminders.map((reminder) => {
+      if (reminder.key !== task.reminderKey) {
+        return reminder;
+      }
+      if (task.target === "client") {
+        return {
+          ...reminder,
+          clientSentAt: patch.sentAt || reminder.clientSentAt,
+          clientError: patch.error || "",
+        };
+      }
+      return {
+        ...reminder,
+        adminSentAt: patch.sentAt || reminder.adminSentAt,
+        adminError: patch.error || "",
+      };
+    }),
+  };
+}
+
+async function processTelegramReminderQueue() {
+  if (telegramReminderQueueRunning) {
+    return;
+  }
+  telegramReminderQueueRunning = true;
+  try {
+    const config = await loadConfig();
+    const tasks = getDueTelegramReminderTasks(config);
+    for (const task of tasks) {
+      try {
+        await sendTelegramMessage(config.telegram, task.chatId, task.text);
+        const sentAt = new Date().toISOString();
+        await updateConfig((currentConfig) => ({
+          ...currentConfig,
+          telegramReminders: currentConfig.telegramReminders.map((record) => (
+            record.id === task.recordId
+              ? updateTelegramReminderSendState(record, task, { sentAt })
+              : record
+          )),
+        }));
+      } catch (error) {
+        const errorMessage = String(error?.message || "Не удалось отправить Telegram-напоминание.").slice(0, 300);
+        await updateConfig((currentConfig) => ({
+          ...currentConfig,
+          telegramReminders: currentConfig.telegramReminders.map((record) => (
+            record.id === task.recordId
+              ? updateTelegramReminderSendState(record, task, { error: errorMessage })
+              : record
+          )),
+        }));
+      }
+    }
+  } finally {
+    telegramReminderQueueRunning = false;
+  }
+}
+
 async function handleTelegramWebhook(request, requestUrl, response) {
   const webhookMatch = /^\/api\/telegram\/webhook\/([A-Za-z0-9_-]{24,120})$/.exec(requestUrl.pathname);
   if (!webhookMatch || request.method !== "POST") {
@@ -4175,6 +4542,7 @@ async function handleTelegramWebhook(request, requestUrl, response) {
   const chatId = message?.chat?.id;
   const text = String(message?.text || "").trim();
   const adminStartValue = `admin_${settings.adminConnectToken}`;
+  const bookingStartMatch = /^\/start\s+booking_([A-Za-z0-9_-]{16,120})$/.exec(text);
 
   if (chatId && text === `/start ${adminStartValue}`) {
     const nextConfig = await updateConfig((currentConfig) => ({
@@ -4193,6 +4561,8 @@ async function handleTelegramWebhook(request, requestUrl, response) {
     } catch {
       // Telegram already delivered the start command; a transient reply failure is non-critical.
     }
+  } else if (chatId && bookingStartMatch) {
+    await activateTelegramBookingReminder(settings, bookingStartMatch[1], message);
   } else {
     await updateConfig((currentConfig) => ({
       ...currentConfig,
@@ -5167,3 +5537,15 @@ if (!process.env.SESSION_SECRET) {
 server.listen(PORT, HOST, () => {
   console.log(`SmartM is listening on http://${HOST}:${PORT}`);
 });
+
+setInterval(() => {
+  processTelegramReminderQueue().catch((error) => {
+    console.warn("[Telegram] reminder queue failed:", error.message);
+  });
+}, TELEGRAM_REMINDER_CHECK_MS);
+
+setTimeout(() => {
+  processTelegramReminderQueue().catch((error) => {
+    console.warn("[Telegram] initial reminder queue failed:", error.message);
+  });
+}, 5000);
