@@ -3958,7 +3958,7 @@ function getTelegramBotStartUrl(settings, startPayload) {
 }
 
 function createTelegramReminderLink(booking, eventData, settings) {
-  if (!settings?.enabled || !normalizeTelegramBotUsername(settings.botUsername)) {
+  if (!booking.clientTelegram || !settings?.enabled || !normalizeTelegramBotUsername(settings.botUsername)) {
     return null;
   }
   const token = createTelegramReminderToken();

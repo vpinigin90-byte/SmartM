@@ -2561,6 +2561,59 @@ body.modal-open {
   font-family: "Mulish", "Segoe UI", Arial, sans-serif;
 }
 
+#booking-form-panel .booking-telegram-opt-in {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+  cursor: pointer;
+  font-family: "Mulish", "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+#booking-form-panel .booking-telegram-opt-in.hidden-panel {
+  display: none;
+}
+
+#booking-form-panel .booking-telegram-opt-in input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#booking-form-panel .telegram-toggle-visual {
+  width: 34px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset -14px 0 0 currentColor;
+}
+
+#booking-form-panel .booking-telegram-opt-in:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #0b0d0e;
+}
+
+#booking-form-panel .booking-telegram-opt-in:has(input:checked) .telegram-toggle-visual {
+  box-shadow: inset 14px 0 0 currentColor;
+}
+
+#booking-form-panel .booking-telegram-opt-in:focus-within {
+  border-color: var(--primary);
+}
+
 #booking-form-panel .field > small {
   display: none;
 }

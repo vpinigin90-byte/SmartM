@@ -112,11 +112,16 @@
                 <small id="client-phone-error" class="field-error" aria-live="polite"></small>
               </label>
 
-              <label class="field contact-telegram-field">
+              <div class="field contact-telegram-field">
                 <span class="field-label">Telegram</span>
                 <input id="client-telegram" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Telegram" />
                 <small id="client-telegram-error" class="field-error" aria-live="polite"></small>
-              </label>
+                <label id="booking-telegram-opt-in" class="booking-telegram-opt-in hidden-panel">
+                  <input id="client-telegram-reminders" type="checkbox" />
+                  <span class="telegram-toggle-visual" aria-hidden="true"></span>
+                  <span>Напомнить о&nbsp;встрече в&nbsp;Telegram</span>
+                </label>
+              </div>
 
               <label class="field company-name-field">
                 <span class="field-label">Наименование компании *</span>

@@ -24,6 +24,8 @@ const clientEmailInput = document.querySelector("#client-email");
 const clientPhoneCountryInput = document.querySelector("#client-phone-country");
 const clientPhoneInput = document.querySelector("#client-phone");
 const clientTelegramInput = document.querySelector("#client-telegram");
+const telegramOptInNode = document.querySelector("#booking-telegram-opt-in");
+const telegramReminderCheckbox = document.querySelector("#client-telegram-reminders");
 const companyNameInput = document.querySelector("#company-name");
 const positionSelect = document.querySelector("#client-position");
 const customPositionInput = document.querySelector("#custom-position");
@@ -137,6 +139,18 @@ function validateTelegramField() {
     setFieldState(clientTelegramInput, FIELD_ERRORS.telegram, error);
   }
   return !error;
+}
+
+function syncTelegramReminderOptInVisibility() {
+  if (!telegramOptInNode || !telegramReminderCheckbox) {
+    return;
+  }
+  const hasTelegram = Boolean(clientTelegramInput?.value.trim());
+  telegramOptInNode.classList.toggle("hidden-panel", !hasTelegram);
+  if (!hasTelegram) {
+    telegramReminderCheckbox.checked = false;
+  }
+  requestAnimationFrame(notifyParentHeight);
 }
 
 function validatePositionField() {
@@ -810,6 +824,7 @@ function resetSelection(resetForm = true) {
     syncCustomPosition();
     syncPhoneMask();
     setCommentFieldOpen(false);
+    syncTelegramReminderOptInVisibility();
   }
   bookingWidget.classList.toggle("hidden-panel", Boolean(state.selectedSlot));
   formPanel.classList.add("hidden-panel");
@@ -862,6 +877,8 @@ async function submitBooking(event) {
   }
 
   const position = getPositionValue();
+  const clientTelegram = clientTelegramInput?.value.trim() || "";
+  const telegramReminderRequested = Boolean(clientTelegram && telegramReminderCheckbox?.checked);
   setSubmitButtonsDisabled(true);
   setStatus("Бронируем встречу...", "");
 
@@ -875,7 +892,8 @@ async function submitBooking(event) {
         clientName: getClientFullName(),
         clientEmail: clientEmailInput.value.trim(),
         clientPhone: getPhoneValueForSubmit(),
-        clientTelegram: clientTelegramInput?.value.trim() || "",
+        clientTelegram,
+        telegramReminderRequested,
         companyName: companyNameInput.value.trim(),
         position,
         additionalAttendees: additionalAttendeesInput.value.trim(),
@@ -887,7 +905,12 @@ async function submitBooking(event) {
 
     resetSelection();
     setStatus("", "");
-    setBookingSuccessModal(true, "", { telegramReminderUrl: result.telegramReminderUrl || "" });
+    if (telegramReminderRequested && result.telegramReminderUrl) {
+      window.open(result.telegramReminderUrl, "_blank", "noopener,noreferrer");
+    }
+    setBookingSuccessModal(true, "", {
+      telegramReminderUrl: clientTelegram && !telegramReminderRequested ? result.telegramReminderUrl || "" : "",
+    });
     loadSlots().catch((error) => {
       setStatus(error.message || "Не удалось обновить доступные слоты.", "error");
     });
@@ -979,9 +1002,13 @@ clientPhoneInput.addEventListener("input", () => {
   validateAfterSubmit(validatePhoneField);
 });
 if (clientTelegramInput) {
-  clientTelegramInput.addEventListener("input", () => validateAfterSubmit(validateTelegramField));
+  clientTelegramInput.addEventListener("input", () => {
+    syncTelegramReminderOptInVisibility();
+    validateAfterSubmit(validateTelegramField);
+  });
   clientTelegramInput.addEventListener("blur", () => validateAfterSubmit(validateTelegramField));
 }
+syncTelegramReminderOptInVisibility();
 clientFirstNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
 clientFirstNameInput.addEventListener("input", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
 clientLastNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientLastNameInput, FIELD_ERRORS.lastName, "Укажите фамилию.")));
