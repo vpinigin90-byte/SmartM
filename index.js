@@ -65,6 +65,8 @@ const TELEGRAM_REMINDER_OFFSETS = [
   { key: "1d", label: "за 1 день", ms: 24 * 60 * 60 * 1000 },
   { key: "1h", label: "за 1 час", ms: 60 * 60 * 1000 },
 ];
+const TELEGRAM_MEETING_HOST = "Виталий Пинигин";
+const TELEGRAM_TEAM_CONTACT_URL = "https://t.me/vpscroll";
 const DEFAULT_SLOT_RULES = {
   workingDays: [1, 2, 3, 4, 5],
   allowSameDay: false,
@@ -4005,14 +4007,25 @@ function createTelegramReminderLink(booking, eventData, settings) {
 }
 
 function formatTelegramMeetingRange(record) {
+  const details = formatTelegramMeetingDetails(record);
+  return `${details.weekdayDate}, ${details.startTime}–${details.endTime}`;
+}
+
+function formatTelegramMeetingDetails(record) {
   const start = new Date(record.start);
   const end = new Date(record.end);
-  const date = new Intl.DateTimeFormat("ru-RU", {
+  const weekdayDate = new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow",
     weekday: "long",
     day: "numeric",
     month: "long",
   }).format(start);
+  const date = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(start).replace(/\s*г\.$/, "");
   const startTime = new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow",
     hour: "2-digit",
@@ -4023,30 +4036,75 @@ function formatTelegramMeetingRange(record) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(end);
-  return `${date}, ${startTime}–${endTime}`;
+  return { date, weekdayDate, startTime, endTime };
+}
+
+function buildTelegramTeamContactKeyboard() {
+  return {
+    inline_keyboard: [[
+      { text: "Связаться с командой", url: TELEGRAM_TEAM_CONTACT_URL },
+    ]],
+  };
+}
+
+function buildTelegramClientReminderKeyboard(record, offset) {
+  const rows = [];
+  if (offset.key === "1h" && /^https?:\/\//i.test(String(record.meetingUrl || "").trim())) {
+    rows.push([
+      { text: "Подключиться к встрече", url: record.meetingUrl },
+    ]);
+  }
+  rows.push([
+    { text: "Связаться с командой", url: TELEGRAM_TEAM_CONTACT_URL },
+  ]);
+  return { inline_keyboard: rows };
 }
 
 function buildTelegramClientConfirmation(record) {
-  const lines = [
-    "У вас запланирована встреча Scrolltool.",
-    formatTelegramMeetingRange(record),
-  ];
-  if (record.meetingUrl) {
-    lines.push(`Ссылка на встречу: ${record.meetingUrl}`);
-  }
-  lines.push("Я напомню о встрече за 3 дня, за 1 день и за 1 час.");
-  return lines.join("\n");
+  const details = formatTelegramMeetingDetails(record);
+  return [
+    "Встреча назначена!",
+    "",
+    `Здравствуйте, ${record.clientName || "участник"}. Ваша встреча с Scrolltool подтверждена.`,
+    "",
+    `Дата: ${details.date}`,
+    `Время: ${details.startTime}–${details.endTime} (Москва)`,
+    `Встречу проведёт: ${TELEGRAM_MEETING_HOST}`,
+    "Формат: онлайн",
+    "",
+    "Я напомню о встрече за 3 дня, за 1 день и за 1 час до начала.",
+  ].join("\n");
 }
 
 function buildTelegramClientReminder(record, offset) {
-  const lines = [
-    `Напоминание о встрече ${offset.label}.`,
-    formatTelegramMeetingRange(record),
-  ];
-  if (record.meetingUrl) {
-    lines.push(`Ссылка на встречу: ${record.meetingUrl}`);
+  const details = formatTelegramMeetingDetails(record);
+  if (offset.key === "3d") {
+    return [
+      "До встречи с Scrolltool осталось 3 дня",
+      "",
+      `Дата: ${details.date}`,
+      `Время: ${details.startTime}–${details.endTime} (Москва)`,
+      `Встречу проведёт: ${TELEGRAM_MEETING_HOST}`,
+    ].join("\n");
   }
-  return lines.join("\n");
+  if (offset.key === "1d") {
+    return [
+      "Напоминаем: встреча с Scrolltool уже завтра",
+      "",
+      `Дата: ${details.date}`,
+      `Время: ${details.startTime}–${details.endTime} (Москва)`,
+      `Встречу проведёт: ${TELEGRAM_MEETING_HOST}`,
+    ].join("\n");
+  }
+  if (offset.key === "1h") {
+    return [
+      "До встречи с Scrolltool остался 1 час",
+      "",
+      `Начинаем в ${details.startTime} по московскому времени.`,
+      "Для входа нажмите кнопку ниже.",
+    ].join("\n");
+  }
+  return `Напоминание о встрече ${offset.label}.\n${formatTelegramMeetingRange(record)}`;
 }
 
 function buildTelegramAdminReminder(record, offset) {
@@ -4062,7 +4120,7 @@ function buildTelegramAdminReminder(record, offset) {
   ].filter(Boolean).join("\n");
 }
 
-async function sendTelegramMessage(settings, chatId, text) {
+async function sendTelegramMessage(settings, chatId, text, options = {}) {
   if (!settings?.enabled || !chatId || !text) {
     return null;
   }
@@ -4070,6 +4128,7 @@ async function sendTelegramMessage(settings, chatId, text) {
     chat_id: chatId,
     text,
     disable_web_page_preview: true,
+    ...options,
   });
 }
 
@@ -4417,7 +4476,12 @@ async function activateTelegramBookingReminder(settings, token, message) {
     return;
   }
 
-  await sendTelegramMessage(nextConfig.telegram, chatId, buildTelegramClientConfirmation(activatedRecord));
+  await sendTelegramMessage(
+    nextConfig.telegram,
+    chatId,
+    buildTelegramClientConfirmation(activatedRecord),
+    { reply_markup: buildTelegramTeamContactKeyboard() },
+  );
   if (nextConfig.telegram.adminChatId) {
     await sendTelegramMessage(nextConfig.telegram, nextConfig.telegram.adminChatId, [
       "Клиент подключил Telegram-напоминания.",
@@ -4450,7 +4514,14 @@ function getDueTelegramReminderTasks(config) {
         continue;
       }
       if (!reminder.clientSentAt) {
-        tasks.push({ target: "client", recordId: record.id, reminderKey: reminder.key, chatId: record.clientChatId, text: buildTelegramClientReminder(record, offset) });
+        tasks.push({
+          target: "client",
+          recordId: record.id,
+          reminderKey: reminder.key,
+          chatId: record.clientChatId,
+          text: buildTelegramClientReminder(record, offset),
+          replyMarkup: buildTelegramClientReminderKeyboard(record, offset),
+        });
       }
       if (settings.adminChatId && !reminder.adminSentAt) {
         tasks.push({ target: "admin", recordId: record.id, reminderKey: reminder.key, chatId: settings.adminChatId, text: buildTelegramAdminReminder(record, offset) });
@@ -4494,7 +4565,12 @@ async function processTelegramReminderQueue() {
     const tasks = getDueTelegramReminderTasks(config);
     for (const task of tasks) {
       try {
-        await sendTelegramMessage(config.telegram, task.chatId, task.text);
+        await sendTelegramMessage(
+          config.telegram,
+          task.chatId,
+          task.text,
+          task.replyMarkup ? { reply_markup: task.replyMarkup } : {},
+        );
         const sentAt = new Date().toISOString();
         await updateConfig((currentConfig) => ({
           ...currentConfig,
