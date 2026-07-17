@@ -923,8 +923,10 @@ function resetBookingFlow() {
 
 function setSubmitButtonsDisabled(disabled) {
   bookButton.disabled = disabled;
+  bookButton.textContent = disabled ? "Бронируем…" : "Назначить встречу";
   if (submitProxyButton) {
     submitProxyButton.disabled = disabled;
+    submitProxyButton.textContent = disabled ? "Бронируем…" : "Назначить встречу";
   }
 }
 
@@ -943,8 +945,8 @@ async function submitBooking(event) {
   const position = getPositionValue();
   const clientTelegram = clientTelegramInput?.value.trim() || "";
   const telegramReminderRequested = Boolean(telegramReminderCheckbox?.checked);
+  setStatus("", "");
   setSubmitButtonsDisabled(true);
-  setStatus("Бронируем встречу...", "");
 
   try {
     const result = await apiRequest("/api/public/bookings", {
