@@ -2588,9 +2588,10 @@ body.modal-open {
   flex: 0 0 auto;
   width: 58px;
   height: 32px;
-  border: 2px solid var(--primary);
+  border: 2px solid var(--border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  background: #15191a;
+  transition: border-color 150ms ease, background 150ms ease;
 }
 
 #booking-form-panel .telegram-toggle-visual::after {
@@ -2612,6 +2613,7 @@ body.modal-open {
 }
 
 #booking-form-panel .booking-telegram-opt-in:has(input:checked) .telegram-toggle-visual {
+  border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 24%, transparent);
 }
 
@@ -2620,7 +2622,7 @@ body.modal-open {
 }
 
 #booking-form-panel .booking-telegram-opt-in:focus-within {
-  border-color: var(--primary);
+  border-color: var(--border);
 }
 
 #booking-form-panel .field > small {

@@ -1064,12 +1064,19 @@ clientPhoneInput.addEventListener("input", () => {
 if (clientTelegramInput) {
   clientTelegramInput.addEventListener("input", () => {
     syncTelegramReminderOptInVisibility();
+    if (
+      telegramReminderCheckbox?.checked
+      || clientTelegramInput.closest(".field")?.classList.contains("invalid")
+    ) {
+      validateTelegramField();
+      return;
+    }
     validateAfterSubmit(validateTelegramField);
   });
   clientTelegramInput.addEventListener("blur", () => validateAfterSubmit(validateTelegramField));
 }
 if (telegramReminderCheckbox) {
-  telegramReminderCheckbox.addEventListener("change", () => validateAfterSubmit(validateTelegramField));
+  telegramReminderCheckbox.addEventListener("change", validateTelegramField);
 }
 syncTelegramReminderOptInVisibility();
 clientFirstNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
