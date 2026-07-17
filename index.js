@@ -106,6 +106,19 @@ const DEFAULT_MTS_LINK_SETTINGS = {
   lastCreateTestMessage: "",
   lastSuccessMeeting: null,
 };
+const DEFAULT_TELEGRAM_SETTINGS = {
+  enabled: false,
+  botUsername: "@scrolltool_meeting_bot",
+  botToken: "",
+  webhookSecret: "",
+  adminConnectToken: "",
+  adminChatId: null,
+  botDisplayName: "",
+  lastConnectionTestAt: null,
+  lastConnectionTestStatus: null,
+  lastConnectionTestMessage: "",
+  lastWebhookAt: null,
+};
 const MTS_LINK_TEMPLATE_VARIABLES = new Set([
   "clientName",
   "clientEmail",
@@ -759,6 +772,42 @@ function normalizeMtsLinkSettings(source = {}) {
   };
 }
 
+function normalizeTelegramBotUsername(value) {
+  const username = String(value || "").trim().replace(/^@+/, "");
+  return username ? `@${username}` : "";
+}
+
+function createTelegramSecret() {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+function normalizeTelegramSettings(source = {}) {
+  const webhookSecret = String(source.webhookSecret || "").trim();
+  const adminConnectToken = String(source.adminConnectToken || "").trim();
+
+  return {
+    enabled: normalizeBooleanValue(source.enabled, DEFAULT_TELEGRAM_SETTINGS.enabled),
+    botUsername: normalizeTelegramBotUsername(source.botUsername || DEFAULT_TELEGRAM_SETTINGS.botUsername),
+    botToken: String(source.botToken || "").trim(),
+    webhookSecret: /^[A-Za-z0-9_-]{24,120}$/.test(webhookSecret) ? webhookSecret : createTelegramSecret(),
+    adminConnectToken: /^[A-Za-z0-9_-]{24,120}$/.test(adminConnectToken)
+      ? adminConnectToken
+      : createTelegramSecret(),
+    adminChatId:
+      source.adminChatId === undefined || source.adminChatId === null || source.adminChatId === ""
+        ? null
+        : String(source.adminChatId).trim().slice(0, 80) || null,
+    botDisplayName: String(source.botDisplayName || "").trim().slice(0, 160),
+    lastConnectionTestAt: String(source.lastConnectionTestAt || "").trim() || null,
+    lastConnectionTestStatus:
+      source.lastConnectionTestStatus === "success" || source.lastConnectionTestStatus === "error"
+        ? source.lastConnectionTestStatus
+        : null,
+    lastConnectionTestMessage: String(source.lastConnectionTestMessage || "").trim().slice(0, 500),
+    lastWebhookAt: String(source.lastWebhookAt || "").trim() || null,
+  };
+}
+
 function normalizeMeetingFiles(source = []) {
   if (!Array.isArray(source)) return [];
   return source
@@ -834,6 +883,7 @@ function normalizeConfig(config = {}) {
     meetingRules: normalizeMeetingRules(config.meetingRules || {}),
     appearance: normalizeAppearance(config.appearance || {}),
     mtsLink: normalizeMtsLinkSettings(config.mtsLink || {}),
+    telegram: normalizeTelegramSettings(config.telegram || {}),
     meetingFiles: normalizeMeetingFiles(config.meetingFiles),
     meetingRegistry: normalizeMeetingRegistry(config.meetingRegistry),
   };
@@ -1657,12 +1707,37 @@ function sanitizeMtsLinkForAdmin(settings = {}) {
   };
 }
 
+function getTelegramAdminConnectUrl(settings = {}) {
+  const username = normalizeTelegramBotUsername(settings.botUsername).replace(/^@/, "");
+  if (!username || !settings.adminConnectToken) {
+    return null;
+  }
+  return `https://t.me/${encodeURIComponent(username)}?start=admin_${encodeURIComponent(settings.adminConnectToken)}`;
+}
+
+function sanitizeTelegramForAdmin(settings = {}) {
+  const normalized = normalizeTelegramSettings(settings);
+  return {
+    enabled: normalized.enabled,
+    botUsername: normalized.botUsername,
+    botToken: normalized.botToken ? MASKED_SECRET : "",
+    botDisplayName: normalized.botDisplayName,
+    adminChatConnected: Boolean(normalized.adminChatId),
+    adminConnectUrl: normalized.botToken ? getTelegramAdminConnectUrl(normalized) : null,
+    lastConnectionTestAt: normalized.lastConnectionTestAt,
+    lastConnectionTestStatus: normalized.lastConnectionTestStatus,
+    lastConnectionTestMessage: normalized.lastConnectionTestMessage,
+    lastWebhookAt: normalized.lastWebhookAt,
+  };
+}
+
 function sanitizeConfigForAdmin(config) {
   const normalized = normalizeConfig(config);
   return {
     ...normalized,
     employees: normalized.employees.map(sanitizeEmployeeForAdmin),
     mtsLink: sanitizeMtsLinkForAdmin(normalized.mtsLink),
+    telegram: sanitizeTelegramForAdmin(normalized.telegram),
   };
 }
 
@@ -4005,7 +4080,120 @@ function handlePublicError(response, error) {
   return json(response, statusCode, { error: message });
 }
 
+function isSameTelegramSecret(actual, expected) {
+  const actualBuffer = Buffer.from(String(actual || ""));
+  const expectedBuffer = Buffer.from(String(expected || ""));
+  return actualBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function assertTelegramSettingsConfigured(settings) {
+  const username = normalizeTelegramBotUsername(settings.botUsername);
+  if (!/^@[A-Za-z0-9_]{5,32}bot$/i.test(username)) {
+    throw createHttpError("Укажите корректный username Telegram-бота, который оканчивается на bot.", 400);
+  }
+  if (!String(settings.botToken || "").trim()) {
+    throw createHttpError("Укажите токен Telegram-бота.", 400);
+  }
+}
+
+async function callTelegramApi(settings, method, payload = {}) {
+  assertTelegramSettingsConfigured(settings);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${settings.botToken}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw createHttpError("Telegram не подтвердил подключение бота.", 502);
+    }
+    return result.result;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw createHttpError("Telegram не ответил вовремя. Попробуйте ещё раз.", 502);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function testTelegramConnection(settings) {
+  const bot = await callTelegramApi(settings, "getMe");
+  const webhookUrl = `${PUBLIC_BASE_URL}/api/telegram/webhook/${settings.webhookSecret}`;
+  await callTelegramApi(settings, "setWebhook", {
+    url: webhookUrl,
+    secret_token: settings.webhookSecret,
+    allowed_updates: ["message"],
+    drop_pending_updates: false,
+  });
+  return {
+    botDisplayName: String(bot.first_name || bot.username || "Telegram-бот").slice(0, 160),
+    message: "Telegram-бот подключён, webhook установлен.",
+  };
+}
+
+async function handleTelegramWebhook(request, requestUrl, response) {
+  const webhookMatch = /^\/api\/telegram\/webhook\/([A-Za-z0-9_-]{24,120})$/.exec(requestUrl.pathname);
+  if (!webhookMatch || request.method !== "POST") {
+    response.writeHead(404);
+    response.end("Not found");
+    return;
+  }
+
+  const config = await loadConfig();
+  const settings = config.telegram;
+  if (!settings.enabled || !isSameTelegramSecret(webhookMatch[1], settings.webhookSecret)) {
+    response.writeHead(404);
+    response.end("Not found");
+    return;
+  }
+
+  const update = await readRequestBody(request);
+  const message = update?.message;
+  const chatId = message?.chat?.id;
+  const text = String(message?.text || "").trim();
+  const adminStartValue = `admin_${settings.adminConnectToken}`;
+
+  if (chatId && text === `/start ${adminStartValue}`) {
+    const nextConfig = await updateConfig((currentConfig) => ({
+      ...currentConfig,
+      telegram: {
+        ...currentConfig.telegram,
+        adminChatId: String(chatId),
+        lastWebhookAt: new Date().toISOString(),
+      },
+    }));
+    try {
+      await callTelegramApi(nextConfig.telegram, "sendMessage", {
+        chat_id: chatId,
+        text: "Администраторский чат подключён. Здесь будут приходить служебные уведомления о встречах.",
+      });
+    } catch {
+      // Telegram already delivered the start command; a transient reply failure is non-critical.
+    }
+  } else {
+    await updateConfig((currentConfig) => ({
+      ...currentConfig,
+      telegram: {
+        ...currentConfig.telegram,
+        lastWebhookAt: new Date().toISOString(),
+      },
+    }));
+  }
+
+  return json(response, 200, { ok: true });
+}
+
 async function handleApi(request, requestUrl, response) {
+  if (requestUrl.pathname.startsWith("/api/telegram/webhook/")) {
+    return handleTelegramWebhook(request, requestUrl, response);
+  }
+
   if (requestUrl.pathname.startsWith("/api/public/")) {
     setPublicCorsHeaders(response);
     if (request.method === "OPTIONS") {
@@ -4585,6 +4773,78 @@ async function handleApi(request, requestUrl, response) {
       return json(response, error.statusCode === 400 ? 400 : 502, {
         error: failureMessage,
         mtsLink: sanitizeMtsLinkForAdmin(nextConfig.mtsLink),
+      });
+    }
+  }
+
+  if (request.method === "GET" && requestUrl.pathname === "/api/integrations/telegram") {
+    const config = await loadConfig();
+    return json(response, 200, { telegram: sanitizeTelegramForAdmin(config.telegram) });
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/integrations/telegram") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request);
+    const nextSettings = normalizeTelegramSettings({
+      ...config.telegram,
+      ...body,
+      botToken: restoreMaskedSecret(String(body.botToken || "").trim(), config.telegram?.botToken),
+    });
+
+    if (nextSettings.enabled) {
+      assertTelegramSettingsConfigured(nextSettings);
+    }
+
+    const nextConfig = {
+      ...config,
+      telegram: nextSettings,
+    };
+    await saveConfig(nextConfig);
+    return json(response, 200, { telegram: sanitizeTelegramForAdmin(nextConfig.telegram) });
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/integrations/telegram/test") {
+    const config = await loadConfig();
+    const body = await readRequestBody(request);
+    const nextSettings = normalizeTelegramSettings({
+      ...config.telegram,
+      ...body,
+      botToken: restoreMaskedSecret(String(body.botToken || "").trim(), config.telegram?.botToken),
+    });
+
+    try {
+      const result = await testTelegramConnection(nextSettings);
+      const nextConfig = {
+        ...config,
+        telegram: {
+          ...nextSettings,
+          enabled: true,
+          botDisplayName: result.botDisplayName,
+          lastConnectionTestAt: new Date().toISOString(),
+          lastConnectionTestStatus: "success",
+          lastConnectionTestMessage: result.message,
+        },
+      };
+      await saveConfig(nextConfig);
+      return json(response, 200, {
+        ok: true,
+        message: result.message,
+        telegram: sanitizeTelegramForAdmin(nextConfig.telegram),
+      });
+    } catch (error) {
+      const nextConfig = {
+        ...config,
+        telegram: {
+          ...nextSettings,
+          lastConnectionTestAt: new Date().toISOString(),
+          lastConnectionTestStatus: "error",
+          lastConnectionTestMessage: error.message || "Не удалось подключить Telegram-бота.",
+        },
+      };
+      await saveConfig(nextConfig);
+      return json(response, error.statusCode === 400 ? 400 : 502, {
+        error: error.message || "Не удалось подключить Telegram-бота.",
+        telegram: sanitizeTelegramForAdmin(nextConfig.telegram),
       });
     }
   }

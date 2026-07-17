@@ -3468,6 +3468,32 @@ body.modal-open {
   gap: 18px;
 }
 
+.admin-shell .telegram-layout .appearance-groups {
+  gap: 18px;
+}
+
+.admin-shell .telegram-layout .appearance-group {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.admin-shell .telegram-layout .telegram-connection-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+}
+
+.admin-shell .telegram-layout .actions {
+  gap: 14px;
+  margin: 0;
+}
+
+.admin-shell .telegram-connect-link {
+  color: var(--primary);
+  font-weight: 800;
+}
+
 .admin-shell #mts-link-form .appearance-group {
   display: grid;
   gap: 18px;
@@ -3526,6 +3552,15 @@ body.modal-open {
   }
 
   #mts-link-form .appearance-group:first-child .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-shell .telegram-layout .telegram-connection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .telegram-layout .actions {
     flex-direction: column;
     align-items: stretch;
   }

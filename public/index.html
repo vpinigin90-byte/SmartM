@@ -108,6 +108,7 @@
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="client-meeting">Настройки доступности</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="meeting-files">Файлы ко встрече</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="mts-link">MTS Link</button>
+          <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="telegram">Telegram</button>
           <button class="tab-button" type="button" role="tab" aria-selected="false" data-tab="embed">HTML/Виджет</button>
         </div>
 
@@ -592,6 +593,65 @@
           </section>
         </section>
 
+        <section class="tab-panel" role="tabpanel" data-tab-panel="telegram">
+          <section class="panel integration-layout telegram-layout">
+            <div class="results-head">
+              <div>
+                <h2>Telegram-бот</h2>
+                <p class="summary">
+                  Подключите бота для напоминаний клиентам и служебных уведомлений о назначенных встречах.
+                </p>
+              </div>
+            </div>
+
+            <form id="telegram-form" class="form appearance-form" autocomplete="off">
+              <div class="appearance-groups">
+                <section class="appearance-group">
+                  <div class="appearance-group-head">
+                    <h3>Подключение</h3>
+                    <p class="appearance-hint">Токен остаётся на сервере и после сохранения показывается только в маскированном виде.</p>
+                  </div>
+
+                  <div class="appearance-grid telegram-connection-grid">
+                    <label class="field compact-field switch-field">
+                      <input id="telegram-enabled" type="checkbox" />
+                      <span class="switch-control" aria-hidden="true"></span>
+                      <span class="switch-field-label">Включить Telegram-бота</span>
+                    </label>
+                    <label class="field compact-field">
+                      <span>Username бота</span>
+                      <input id="telegram-bot-username" type="text" placeholder="@scrolltool_meeting_bot" aria-label="Username Telegram-бота" autocapitalize="off" spellcheck="false" />
+                    </label>
+                    <label class="field compact-field">
+                      <span>Токен бота</span>
+                      <input id="telegram-bot-token" type="password" placeholder="Токен от BotFather" aria-label="Токен Telegram-бота" autocomplete="new-password" />
+                    </label>
+                  </div>
+
+                  <div class="actions">
+                    <button id="save-telegram-button" class="primary-button" type="submit">Сохранить настройки Telegram</button>
+                    <button id="test-telegram-button" class="secondary-button" type="button">Проверить подключение</button>
+                  </div>
+
+                  <div id="telegram-connection-status" class="rules-preview integration-reference" aria-live="polite">
+                    <p>Подключение Telegram-бота ещё не проверялось.</p>
+                  </div>
+                </section>
+
+                <section class="appearance-group">
+                  <div class="appearance-group-head">
+                    <h3>Администраторский чат</h3>
+                    <p class="appearance-hint">Откройте защищённую ссылку в Telegram после проверки бота, чтобы получать служебные уведомления.</p>
+                  </div>
+                  <div id="telegram-admin-status" class="rules-preview integration-reference" aria-live="polite">
+                    <p>Сначала сохраните токен и проверьте подключение Telegram-бота.</p>
+                  </div>
+                </section>
+              </div>
+            </form>
+          </section>
+        </section>
+
         <section class="tab-panel" role="tabpanel" data-tab-panel="embed">
           <section class="panel">
             <div class="results-head">
@@ -703,6 +763,7 @@
 
     <script src="/admin.js"></script>
     <script src="/admin-integrations.js"></script>
+    <script src="/admin-telegram.js"></script>
     <script src="/admin-meeting-files.js"></script>
     <script src="/admin-meeting-registry.js"></script>
     <script src="/course-dashboard.js"></script>
