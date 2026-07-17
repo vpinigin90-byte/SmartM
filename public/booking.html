@@ -116,10 +116,10 @@
                 <span class="field-label">Telegram</span>
                 <input id="client-telegram" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Telegram" />
                 <small id="client-telegram-error" class="field-error" aria-live="polite"></small>
-                <label id="booking-telegram-opt-in" class="booking-telegram-opt-in hidden-panel">
+                <label id="booking-telegram-opt-in" class="booking-telegram-opt-in">
                   <input id="client-telegram-reminders" type="checkbox" />
                   <span class="telegram-toggle-visual" aria-hidden="true"></span>
-                  <span>Напомнить о&nbsp;встрече в&nbsp;Telegram</span>
+                  <span class="telegram-toggle-text">Напомнить о&nbsp;встрече в&nbsp;Телеграм</span>
                 </label>
               </div>
 
@@ -167,16 +167,18 @@
                 <textarea id="client-comment" class="hidden-panel" rows="3" placeholder="Укажите заранее, какие вопросы вы хотите обсудить на встрече и какие возможности приоритетно рассмотреть."></textarea>
               </label>
 
-              <div class="booking-form-actions booking-form-actions-bottom">
-                <button class="secondary-button booking-cancel-button" type="button">Отменить</button>
-                <button id="book-slot-button" class="primary-button" type="submit">Назначить встречу</button>
-              </div>
+              <div class="booking-submit-block">
+                <div class="booking-form-actions booking-form-actions-bottom">
+                  <button class="secondary-button booking-cancel-button" type="button">Отменить</button>
+                  <button id="book-slot-button" class="primary-button" type="submit">Назначить встречу</button>
+                </div>
 
-              <p class="booking-consent">
-                Нажимая кнопку «Назначить&nbsp;встречу», я&nbsp;подтверждаю, что даю согласие
-                на&nbsp;обработку и&nbsp;передачу персональных данных в&nbsp;соответствии с
-                <a href="https://scroll-tool.ru/processingpolicy" target="_blank" rel="noopener noreferrer">Политикой&nbsp;конфиденциальности</a>.
-              </p>
+                <p class="booking-consent">
+                  Нажимая кнопку «Назначить&nbsp;встречу», я&nbsp;подтверждаю, что даю согласие
+                  на&nbsp;обработку и&nbsp;передачу персональных данных в&nbsp;соответствии с
+                  <a href="https://scroll-tool.ru/processingpolicy" target="_blank" rel="noopener noreferrer">Политикой&nbsp;конфиденциальности</a>.
+                </p>
+              </div>
             </form>
           </div>
         </section>
@@ -192,8 +194,7 @@
           Проверьте свой календарь или&nbsp;уведомления в&nbsp;вашем почтовом ящике.
         </p>
         <div id="booking-telegram-reminder" class="booking-telegram-reminder hidden-panel">
-          <span>Напомнить о&nbsp;встрече в&nbsp;Telegram</span>
-          <a id="booking-telegram-reminder-link" href="#" target="_blank" rel="noopener noreferrer">Подключить напоминания</a>
+          <a id="booking-telegram-reminder-link" href="#" target="_blank" rel="noopener noreferrer">перейти в телеграм</a>
         </div>
       </div>
     </div>

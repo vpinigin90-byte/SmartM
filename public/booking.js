@@ -156,9 +156,13 @@ function validatePhoneField() {
 
 function validateTelegramField() {
   const value = clientTelegramInput?.value.trim().replace(/^@+/, "") || "";
-  const error = !value || /^[A-Za-z0-9_]{5,32}$/.test(value)
-    ? ""
-    : "Укажите корректный Telegram username.";
+  const wantsReminders = Boolean(telegramReminderCheckbox?.checked);
+  let error = "";
+  if (wantsReminders && !value) {
+    error = "Укажите Telegram username.";
+  } else if (value && !/^[A-Za-z0-9_]{5,32}$/.test(value)) {
+    error = "Укажите корректный Telegram username.";
+  }
   if (clientTelegramInput) {
     setFieldState(clientTelegramInput, FIELD_ERRORS.telegram, error);
   }
@@ -169,11 +173,7 @@ function syncTelegramReminderOptInVisibility() {
   if (!telegramOptInNode || !telegramReminderCheckbox) {
     return;
   }
-  const hasTelegram = Boolean(clientTelegramInput?.value.trim());
-  telegramOptInNode.classList.toggle("hidden-panel", !hasTelegram);
-  if (!hasTelegram) {
-    telegramReminderCheckbox.checked = false;
-  }
+  telegramOptInNode.classList.remove("hidden-panel");
   requestAnimationFrame(notifyParentHeight);
 }
 
@@ -941,7 +941,7 @@ async function submitBooking(event) {
 
   const position = getPositionValue();
   const clientTelegram = clientTelegramInput?.value.trim() || "";
-  const telegramReminderRequested = Boolean(clientTelegram && telegramReminderCheckbox?.checked);
+  const telegramReminderRequested = Boolean(telegramReminderCheckbox?.checked);
   setSubmitButtonsDisabled(true);
   setStatus("Бронируем встречу...", "");
 
@@ -968,11 +968,8 @@ async function submitBooking(event) {
 
     resetSelection();
     setStatus("", "");
-    if (telegramReminderRequested && result.telegramReminderUrl) {
-      window.open(result.telegramReminderUrl, "_blank", "noopener,noreferrer");
-    }
     setBookingSuccessModal(true, "", {
-      telegramReminderUrl: clientTelegram && !telegramReminderRequested ? result.telegramReminderUrl || "" : "",
+      telegramReminderUrl: telegramReminderRequested ? result.telegramReminderUrl || "" : "",
     });
     loadSlots().catch((error) => {
       setStatus(error.message || "Не удалось обновить доступные слоты.", "error");
@@ -1070,6 +1067,9 @@ if (clientTelegramInput) {
     validateAfterSubmit(validateTelegramField);
   });
   clientTelegramInput.addEventListener("blur", () => validateAfterSubmit(validateTelegramField));
+}
+if (telegramReminderCheckbox) {
+  telegramReminderCheckbox.addEventListener("change", () => validateAfterSubmit(validateTelegramField));
 }
 syncTelegramReminderOptInVisibility();
 clientFirstNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(clientFirstNameInput, FIELD_ERRORS.firstName, "Укажите имя.")));
