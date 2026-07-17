@@ -3481,9 +3481,14 @@ body.modal-open {
 }
 
 .admin-shell .telegram-layout .telegram-connection-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(180px, 0.9fr) repeat(2, minmax(220px, 1fr));
   align-items: stretch;
   gap: 14px;
+}
+
+.admin-shell .telegram-layout .telegram-connection-grid .field:nth-child(4),
+.admin-shell .telegram-layout .telegram-connection-grid .field:nth-child(5) {
+  grid-column: span 1;
 }
 
 .admin-shell .telegram-layout .actions {

@@ -110,6 +110,8 @@ const DEFAULT_TELEGRAM_SETTINGS = {
   enabled: false,
   botUsername: "@scrolltool_meeting_bot",
   botToken: "",
+  relayUrl: "",
+  relaySecret: "",
   webhookSecret: "",
   adminConnectToken: "",
   adminChatId: null,
@@ -789,6 +791,8 @@ function normalizeTelegramSettings(source = {}) {
     enabled: normalizeBooleanValue(source.enabled, DEFAULT_TELEGRAM_SETTINGS.enabled),
     botUsername: normalizeTelegramBotUsername(source.botUsername || DEFAULT_TELEGRAM_SETTINGS.botUsername),
     botToken: String(source.botToken || "").trim(),
+    relayUrl: String(source.relayUrl || "").trim().replace(/\/+$/, ""),
+    relaySecret: String(source.relaySecret || "").trim(),
     webhookSecret: /^[A-Za-z0-9_-]{24,120}$/.test(webhookSecret) ? webhookSecret : createTelegramSecret(),
     adminConnectToken: /^[A-Za-z0-9_-]{24,120}$/.test(adminConnectToken)
       ? adminConnectToken
@@ -1717,13 +1721,16 @@ function getTelegramAdminConnectUrl(settings = {}) {
 
 function sanitizeTelegramForAdmin(settings = {}) {
   const normalized = normalizeTelegramSettings(settings);
+  const canConnectAdminChat = Boolean(normalized.botToken || (normalized.relayUrl && normalized.relaySecret));
   return {
     enabled: normalized.enabled,
     botUsername: normalized.botUsername,
     botToken: normalized.botToken ? MASKED_SECRET : "",
+    relayUrl: normalized.relayUrl,
+    relaySecret: normalized.relaySecret ? MASKED_SECRET : "",
     botDisplayName: normalized.botDisplayName,
     adminChatConnected: Boolean(normalized.adminChatId),
-    adminConnectUrl: normalized.botToken ? getTelegramAdminConnectUrl(normalized) : null,
+    adminConnectUrl: canConnectAdminChat ? getTelegramAdminConnectUrl(normalized) : null,
     lastConnectionTestAt: normalized.lastConnectionTestAt,
     lastConnectionTestStatus: normalized.lastConnectionTestStatus,
     lastConnectionTestMessage: normalized.lastConnectionTestMessage,
@@ -3925,15 +3932,6 @@ async function createPublicBooking(booking, config = null) {
     descriptionSections.push(`Ссылка на встречу: ${mtsLinkMeeting.meetingUrl}`);
   }
 
-  if (mtsLinkMeeting?.meetingUrl && mtsLinkSettings.appendMeetingMetaToDescription) {
-    descriptionSections.push("Создано через MTS Link");
-    descriptionSections.push(`Event ID: ${mtsLinkMeeting.eventId}`);
-    descriptionSections.push(`EventSession ID: ${mtsLinkMeeting.eventSessionId}`);
-    if (mtsLinkMeeting.registrantId) {
-      descriptionSections.push(`Registrant ID: ${mtsLinkMeeting.registrantId}`);
-    }
-  }
-
   const attachments = currentConfig.meetingFiles.map((file) => ({
     ...file,
     url: getMeetingFileDownloadUrl(file),
@@ -4091,8 +4089,13 @@ function assertTelegramSettingsConfigured(settings) {
   if (!/^@[A-Za-z0-9_]{5,32}bot$/i.test(username)) {
     throw createHttpError("Укажите корректный username Telegram-бота, который оканчивается на bot.", 400);
   }
+  const hasRelay = Boolean(String(settings.relayUrl || "").trim() && String(settings.relaySecret || "").trim());
+  if (hasRelay) {
+    parseAbsoluteUrl(settings.relayUrl, "URL Telegram relay");
+    return;
+  }
   if (!String(settings.botToken || "").trim()) {
-    throw createHttpError("Укажите токен Telegram-бота.", 400);
+    throw createHttpError("Укажите токен Telegram-бота или настройки Cloudflare relay.", 400);
   }
 }
 
@@ -4100,21 +4103,35 @@ async function callTelegramApi(settings, method, payload = {}) {
   assertTelegramSettingsConfigured(settings);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
+  const relayUrl = String(settings.relayUrl || "").trim();
+  const relaySecret = String(settings.relaySecret || "").trim();
+  const useRelay = Boolean(relayUrl && relaySecret);
   try {
-    const response = await fetch(`https://api.telegram.org/bot${settings.botToken}/${method}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+    const response = useRelay
+      ? await fetch(parseAbsoluteUrl(relayUrl, "URL Telegram relay").toString(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${relaySecret}`,
+          },
+          body: JSON.stringify({ method, payload }),
+          signal: controller.signal,
+        })
+      : await fetch(`https://api.telegram.org/bot${settings.botToken}/${method}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.ok) {
-      throw createHttpError("Telegram не подтвердил подключение бота.", 502);
+      const relaySuffix = useRelay ? " через Cloudflare relay" : "";
+      throw createHttpError(`Telegram не подтвердил подключение бота${relaySuffix}.`, 502);
     }
     return result.result;
   } catch (error) {
     if (error.name === "AbortError") {
-      throw createHttpError("Telegram не ответил вовремя. Попробуйте ещё раз.", 502);
+      throw createHttpError(useRelay ? "Telegram relay не ответил вовремя. Попробуйте ещё раз." : "Telegram не ответил вовремя. Попробуйте ещё раз.", 502);
     }
     throw error;
   } finally {
@@ -4789,6 +4806,7 @@ async function handleApi(request, requestUrl, response) {
       ...config.telegram,
       ...body,
       botToken: restoreMaskedSecret(String(body.botToken || "").trim(), config.telegram?.botToken),
+      relaySecret: restoreMaskedSecret(String(body.relaySecret || "").trim(), config.telegram?.relaySecret),
     });
 
     if (nextSettings.enabled) {
@@ -4810,6 +4828,7 @@ async function handleApi(request, requestUrl, response) {
       ...config.telegram,
       ...body,
       botToken: restoreMaskedSecret(String(body.botToken || "").trim(), config.telegram?.botToken),
+      relaySecret: restoreMaskedSecret(String(body.relaySecret || "").trim(), config.telegram?.relaySecret),
     });
 
     try {

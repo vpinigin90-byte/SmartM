@@ -13,6 +13,8 @@
     enabled: document.querySelector("#telegram-enabled"),
     botUsername: document.querySelector("#telegram-bot-username"),
     botToken: document.querySelector("#telegram-bot-token"),
+    relayUrl: document.querySelector("#telegram-relay-url"),
+    relaySecret: document.querySelector("#telegram-relay-secret"),
   };
 
   function escapeHtml(value) {
@@ -29,6 +31,8 @@
       enabled: fields.enabled.checked,
       botUsername: fields.botUsername.value.trim(),
       botToken: fields.botToken.value.trim(),
+      relayUrl: fields.relayUrl.value.trim(),
+      relaySecret: fields.relaySecret.value.trim(),
     };
   }
 
@@ -70,6 +74,8 @@
     fields.enabled.checked = Boolean(settings.enabled);
     fields.botUsername.value = settings.botUsername || "";
     fields.botToken.value = settings.botToken || "";
+    fields.relayUrl.value = settings.relayUrl || "";
+    fields.relaySecret.value = settings.relaySecret || "";
     renderConnectionStatus(settings);
     renderAdminStatus(settings);
   }

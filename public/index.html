@@ -624,7 +624,15 @@
                     </label>
                     <label class="field compact-field">
                       <span>Токен бота</span>
-                      <input id="telegram-bot-token" type="password" placeholder="Токен от BotFather" aria-label="Токен Telegram-бота" autocomplete="new-password" />
+                      <input id="telegram-bot-token" type="password" placeholder="Токен от BotFather, если relay не используется" aria-label="Токен Telegram-бота" autocomplete="new-password" />
+                    </label>
+                    <label class="field compact-field">
+                      <span>Relay URL</span>
+                      <input id="telegram-relay-url" type="url" placeholder="https://scrolltool-telegram-relay.vpinigin90.workers.dev" aria-label="URL Telegram relay" autocapitalize="off" spellcheck="false" />
+                    </label>
+                    <label class="field compact-field">
+                      <span>Relay secret</span>
+                      <input id="telegram-relay-secret" type="password" placeholder="Секрет Cloudflare Worker" aria-label="Секрет Telegram relay" autocomplete="new-password" />
                     </label>
                   </div>
 
