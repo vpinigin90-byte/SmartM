@@ -757,7 +757,7 @@ function populatePhoneCountries() {
     `<option value="${countryCode}" data-dial-code="${dialCode}">${escapeHtml(getPhoneCountryName(countryCode))} +${dialCode}</option>`
   );
   const frequentOptions = countryEntries.filter(({ countryCode }) => frequentCountries.has(countryCode)).map(option).join("");
-  const allOptions = countryEntries.map(option).join("");
+  const allOptions = countryEntries.filter(({ countryCode }) => !frequentCountries.has(countryCode)).map(option).join("");
 
   clientPhoneCountryInput.innerHTML = `<optgroup label="Часто используемые">${frequentOptions}</optgroup><optgroup label="Все страны">${allOptions}</optgroup>`;
   clientPhoneCountryInput.value = PHONE_COUNTRIES[selectedCountry] ? selectedCountry : "RU";
