@@ -448,7 +448,9 @@ body.booking-page.embedded-booking .booking-shell {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  min-width: 40px;
+  /* Sized for the longest Russian month label. */
+  width: 144px;
+  flex: 0 0 144px;
   height: 40px;
   min-height: 40px;
   padding: 0 14px;
