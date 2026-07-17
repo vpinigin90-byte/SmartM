@@ -447,22 +447,24 @@ body.booking-page.embedded-booking .booking-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
+  gap: 9px;
+  min-width: 40px;
   height: 40px;
   min-height: 40px;
-  padding: 0;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--muted);
   color: var(--booking-muted-text-color);
-  font-size: 0;
-  line-height: 0;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: var(--booking-body-font-weight);
   box-shadow: none;
   cursor: pointer;
   pointer-events: auto;
 }
 
-.calendar-nav-button span {
+.calendar-nav-arrow {
   display: block;
   width: 9px;
   height: 9px;
@@ -472,8 +474,12 @@ body.booking-page.embedded-booking .booking-shell {
   transform: rotate(45deg);
 }
 
-#calendar-prev-button span {
+.calendar-nav-button.is-previous .calendar-nav-arrow {
   transform: rotate(-135deg);
+}
+
+.calendar-nav-label {
+  line-height: 1;
 }
 
 .calendar-nav-button:hover:not(:disabled) {

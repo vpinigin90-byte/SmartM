@@ -301,6 +301,44 @@ function getFirstAvailableDayInMonth(monthStart) {
   }) || null;
 }
 
+function getAvailableMonthInDirection(monthStart, direction, bounds) {
+  let month = addMonths(monthStart, direction);
+  while (month >= bounds.min && month <= bounds.max) {
+    if (hasAvailableSlotsInMonth(month)) {
+      return month;
+    }
+    month = addMonths(month, direction);
+  }
+  return null;
+}
+
+function formatCalendarNavigationLabel(date) {
+  const month = new Intl.DateTimeFormat("ru-RU", { month: "long" }).format(date);
+  return month.charAt(0).toUpperCase() + month.slice(1);
+}
+
+function renderCalendarNavigationButton(button, targetMonth, direction) {
+  if (!button) {
+    return;
+  }
+
+  const isAvailable = Boolean(targetMonth);
+  button.disabled = !isAvailable;
+  button.classList.toggle("hidden-panel", !isAvailable);
+  button.classList.toggle("is-previous", direction < 0);
+  button.classList.toggle("is-next", direction > 0);
+  if (!isAvailable) {
+    return;
+  }
+
+  const label = formatCalendarNavigationLabel(targetMonth);
+  button.setAttribute("aria-label", `${direction > 0 ? "Следующий" : "Предыдущий"} месяц: ${label}`);
+  const labelNode = button.querySelector(".calendar-nav-label");
+  if (labelNode) {
+    labelNode.textContent = label;
+  }
+}
+
 function formatDateTimeLabel(date) {
   return new Intl.DateTimeFormat("ru-RU", {
     day: "2-digit",
@@ -424,18 +462,10 @@ function renderDates() {
   if (calendarMonthLabelNode) {
     calendarMonthLabelNode.textContent = formatCalendarMonthLabel(state.visibleMonthStart);
   }
-  if (calendarPrevButton) {
-    const previousMonth = addMonths(state.visibleMonthStart, -1);
-    const canShowPrevious = state.visibleMonthStart > bounds.min && hasAvailableSlotsInMonth(previousMonth);
-    calendarPrevButton.disabled = !canShowPrevious;
-    calendarPrevButton.classList.toggle("hidden-panel", !canShowPrevious);
-  }
-  if (calendarNextButton) {
-    const nextMonth = addMonths(state.visibleMonthStart, 1);
-    const canShowNext = state.visibleMonthStart < bounds.max && hasAvailableSlotsInMonth(nextMonth);
-    calendarNextButton.disabled = !canShowNext;
-    calendarNextButton.classList.toggle("hidden-panel", !canShowNext);
-  }
+  const previousAvailableMonth = getAvailableMonthInDirection(state.visibleMonthStart, -1, bounds);
+  const nextAvailableMonth = getAvailableMonthInDirection(state.visibleMonthStart, 1, bounds);
+  renderCalendarNavigationButton(calendarPrevButton, previousAvailableMonth, -1);
+  renderCalendarNavigationButton(calendarNextButton, nextAvailableMonth, 1);
 
   const monthStart = state.visibleMonthStart;
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
@@ -838,9 +868,12 @@ if (calendarPrevButton) {
     if (!bounds || !state.visibleMonthStart) {
       return;
     }
-    const nextMonth = clampMonthToBounds(addMonths(state.visibleMonthStart, -1), bounds);
-    state.visibleMonthStart = nextMonth;
-    state.selectedDayKey = getFirstAvailableDayInMonth(nextMonth);
+    const previousMonth = getAvailableMonthInDirection(state.visibleMonthStart, -1, bounds);
+    if (!previousMonth) {
+      return;
+    }
+    state.visibleMonthStart = previousMonth;
+    state.selectedDayKey = getFirstAvailableDayInMonth(previousMonth);
     renderDates();
     renderSlotsForSelectedDate();
   });
@@ -851,7 +884,10 @@ if (calendarNextButton) {
     if (!bounds || !state.visibleMonthStart) {
       return;
     }
-    const nextMonth = clampMonthToBounds(addMonths(state.visibleMonthStart, 1), bounds);
+    const nextMonth = getAvailableMonthInDirection(state.visibleMonthStart, 1, bounds);
+    if (!nextMonth) {
+      return;
+    }
     state.visibleMonthStart = nextMonth;
     state.selectedDayKey = getFirstAvailableDayInMonth(nextMonth);
     renderDates();
