@@ -1405,7 +1405,7 @@ function purgeExpiredMapEntries(map, now = Date.now()) {
   }
 }
 
-function assertPublicBookingNotDuplicate(request, booking) {
+function reservePublicBookingDuplicate(request, booking) {
   const now = Date.now();
   purgeExpiredMapEntries(publicBookingDuplicates, now);
   const ip = getClientIp(request);
@@ -1420,7 +1420,16 @@ function assertPublicBookingNotDuplicate(request, booking) {
     throw createHttpError("Duplicate booking", 429);
   }
 
-  keys.forEach((key) => publicBookingDuplicates.set(key, now + PUBLIC_BOOKING_DUPLICATE_WINDOW_MS));
+  const expiresAt = now + PUBLIC_BOOKING_DUPLICATE_WINDOW_MS;
+  keys.forEach((key) => publicBookingDuplicates.set(key, expiresAt));
+
+  return () => {
+    keys.forEach((key) => {
+      if (publicBookingDuplicates.get(key) === expiresAt) {
+        publicBookingDuplicates.delete(key);
+      }
+    });
+  };
 }
 
 function createHttpError(message, statusCode = 400) {
@@ -3398,26 +3407,45 @@ async function putCalendarObject(email, password, eventUrl, eventIcs, options = 
     headers["If-Match"] = options.etag;
   }
 
-  const response = await fetch(eventUrl, {
-    method: "PUT",
-    headers,
-    body: eventIcs,
-  });
+  const retryDelays = [0, 350, 1000];
+  let lastError = null;
 
-  const text = await response.text();
-  if (!response.ok && response.status !== 201 && response.status !== 204) {
-    const error = new Error(`PUT failed with status ${response.status}`);
-    error.statusCode = response.status;
-    error.responseText = text;
-    error.eventUrl = eventUrl;
-    throw error;
+  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+    if (retryDelays[attempt]) {
+      await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+    }
+
+    try {
+      const response = await fetch(eventUrl, {
+        method: "PUT",
+        headers,
+        body: eventIcs,
+      });
+      const text = await response.text();
+      if (!response.ok && response.status !== 201 && response.status !== 204) {
+        const error = new Error(`PUT failed with status ${response.status}`);
+        error.statusCode = response.status;
+        error.responseText = text;
+        error.eventUrl = eventUrl;
+        throw error;
+      }
+
+      return {
+        ok: true,
+        eventUrl,
+        etag: response.headers.get("etag"),
+      };
+    } catch (error) {
+      lastError = error;
+      const statusCode = Number(error.statusCode) || 0;
+      const isTransient = !statusCode || statusCode === 408 || statusCode === 425 || statusCode === 429 || statusCode >= 500;
+      if (!isTransient || attempt === retryDelays.length - 1) {
+        throw error;
+      }
+    }
   }
 
-  return {
-    ok: true,
-    eventUrl,
-    etag: response.headers.get("etag"),
-  };
+  throw lastError;
 }
 
 async function deleteCalendarObject(email, password, eventUrl, etag = null) {
@@ -4172,6 +4200,7 @@ async function createPublicBooking(booking, config = null) {
       if (!mtsLinkSettings.fallbackWithoutLink) {
         const mtsError = new Error("MTS Link is unavailable");
         mtsError.statusCode = 502;
+        mtsError.bookingStage = "mts-link";
         throw mtsError;
       }
     }
@@ -4228,9 +4257,14 @@ async function createPublicBooking(booking, config = null) {
     ],
   });
 
-  await putCalendarObject(target.employee.email, target.employee.password, eventUrl, eventIcs, {
-    ifNoneMatch: true,
-  });
+  try {
+    await putCalendarObject(target.employee.email, target.employee.password, eventUrl, eventIcs, {
+      ifNoneMatch: true,
+    });
+  } catch (error) {
+    error.bookingStage = error.bookingStage || "calendar-write";
+    throw error;
+  }
 
   const registryEvent = {
     calendarUrl: target.writableCalendar.url,
@@ -4249,18 +4283,23 @@ async function createPublicBooking(booking, config = null) {
     title: registryEvent.summary,
     meetingUrl: mtsLinkMeeting?.meetingUrl || null,
   }, currentConfig.telegram);
-  await updateConfig((currentConfig) => {
-    const entry = mapCalendarEventToRegistry(registryEvent, target.employee.email);
-    entry.source = "api";
-    entry.mtsLink = mtsLinkMeeting ? { eventId: mtsLinkMeeting.eventId, eventSessionId: mtsLinkMeeting.eventSessionId } : null;
-    return {
-      ...currentConfig,
-      meetingRegistry: [...currentConfig.meetingRegistry.filter((item) => item.id !== entry.id), entry],
-      telegramReminders: telegramReminder
-        ? [...currentConfig.telegramReminders.filter((item) => item.uid !== uid), telegramReminder.record]
-        : currentConfig.telegramReminders,
-    };
-  });
+  try {
+    await updateConfig((currentConfig) => {
+      const entry = mapCalendarEventToRegistry(registryEvent, target.employee.email);
+      entry.source = "api";
+      entry.mtsLink = mtsLinkMeeting ? { eventId: mtsLinkMeeting.eventId, eventSessionId: mtsLinkMeeting.eventSessionId } : null;
+      return {
+        ...currentConfig,
+        meetingRegistry: [...currentConfig.meetingRegistry.filter((item) => item.id !== entry.id), entry],
+        telegramReminders: telegramReminder
+          ? [...currentConfig.telegramReminders.filter((item) => item.uid !== uid), telegramReminder.record]
+          : currentConfig.telegramReminders,
+      };
+    });
+  } catch (error) {
+    error.bookingStage = error.bookingStage || "registry-save";
+    throw error;
+  }
 
   return {
     ok: true,
@@ -4350,6 +4389,14 @@ function handlePublicError(response, error) {
         : statusCode === 429
           ? "Слишком много запросов. Попробуйте позже."
           : "Не удалось выполнить бронирование. Попробуйте позже.";
+
+  if (statusCode === 500) {
+    console.error("[Public booking]", {
+      stage: error.bookingStage || "unknown",
+      message: String(error.message || "Unknown error").slice(0, 300),
+      upstreamStatus: Number(error.statusCode) || null,
+    });
+  }
 
   return json(response, statusCode, { error: message });
 }
@@ -4978,6 +5025,7 @@ async function handleApi(request, requestUrl, response) {
     if (!checkRateLimit(request, "public-bookings", PUBLIC_BOOKING_IP_RATE_LIMIT)) {
       return json(response, 429, { error: "Слишком много запросов. Попробуйте позже." });
     }
+    let releaseDuplicateReservation = null;
     try {
       const body = await readRequestBody(request);
       assertHoneypotIsEmpty(body);
@@ -4986,10 +5034,13 @@ async function handleApi(request, requestUrl, response) {
       if (!checkRateLimitForKey("public-bookings-email", booking.clientEmail.toLowerCase(), PUBLIC_BOOKING_EMAIL_RATE_LIMIT)) {
         throw createHttpError("Too many booking attempts for email", 429);
       }
-      assertPublicBookingNotDuplicate(request, booking);
+      releaseDuplicateReservation = reservePublicBookingDuplicate(request, booking);
       const result = await createPublicBooking(booking, config);
       return json(response, 201, result);
     } catch (error) {
+      if (releaseDuplicateReservation) {
+        releaseDuplicateReservation();
+      }
       return handlePublicError(response, error);
     }
   }

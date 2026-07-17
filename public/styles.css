@@ -2803,6 +2803,10 @@ body.modal-open {
   margin-top: -4px;
 }
 
+#booking-form-panel .booking-form-status {
+  margin: 0;
+}
+
 #booking-form:has(.position-custom-field:not(.hidden-panel)) .booking-submit-block {
   grid-row: 7;
 }

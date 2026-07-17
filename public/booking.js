@@ -6,6 +6,7 @@ const calendarNextButton = document.querySelector("#calendar-next-button");
 const slotsPanel = document.querySelector("#public-slots-panel");
 const slotsNode = document.querySelector("#public-slots");
 const statusNode = document.querySelector("#booking-status");
+const formStatusNode = document.querySelector("#booking-form-status");
 const selectedDateSummaryNode = document.querySelector("#selected-date-summary");
 const selectedDatePanel = document.querySelector("#selected-date-panel");
 const bookingTitleNode = document.querySelector("#booking-title");
@@ -218,11 +219,11 @@ function validateBookingForm() {
 }
 
 function setStatus(message, kind = "") {
-  if (!statusNode) {
-    return;
+  const statusNodes = [statusNode, formStatusNode].filter(Boolean);
+  for (const node of statusNodes) {
+    node.textContent = message;
+    node.className = `status${node === formStatusNode ? " booking-form-status" : ""}${kind ? ` ${kind}` : ""}`;
   }
-  statusNode.textContent = message;
-  statusNode.className = `status${kind ? ` ${kind}` : ""}`;
   notifyParentHeight();
 }
 
