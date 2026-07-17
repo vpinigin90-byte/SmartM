@@ -475,12 +475,28 @@ function renderDates() {
 
   const html = [];
   const leadingEmptyCells = (monthStart.getDay() + 6) % 7;
-  for (let index = 0; index < leadingEmptyCells; index += 1) {
-    html.push('<span class="date-option-spacer" aria-hidden="true"></span>');
+  const calendarGridStart = new Date(monthStart);
+  calendarGridStart.setDate(calendarGridStart.getDate() - leadingEmptyCells);
+  const calendarGridEnd = new Date(monthEnd);
+  calendarGridEnd.setDate(calendarGridEnd.getDate() + (6 - ((calendarGridEnd.getDay() + 6) % 7)));
+  const visibleGridStart = new Date(calendarGridStart);
+
+  // Keep the current week intact, but remove rows that ended before today.
+  while (visibleGridStart <= calendarGridEnd) {
+    const visibleWeekEnd = new Date(visibleGridStart);
+    visibleWeekEnd.setDate(visibleWeekEnd.getDate() + 6);
+    if (visibleWeekEnd >= todayStart) {
+      break;
+    }
+    visibleGridStart.setDate(visibleGridStart.getDate() + 7);
   }
 
-  for (const cursor = new Date(monthStart); cursor <= monthEnd; cursor.setDate(cursor.getDate() + 1)) {
+  for (const cursor = new Date(visibleGridStart); cursor <= calendarGridEnd; cursor.setDate(cursor.getDate() + 1)) {
     const cellDate = new Date(cursor);
+    if (cellDate.getMonth() !== monthStart.getMonth()) {
+      html.push('<span class="date-option-spacer" aria-hidden="true"></span>');
+      continue;
+    }
     const dayKey = toLocalDayStart(cellDate).toISOString();
     const isPastDisplayOnly = cellDate < todayStart;
     const isSameDayDisabled =
