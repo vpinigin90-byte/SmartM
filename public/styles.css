@@ -1788,6 +1788,16 @@ body.modal-open {
   outline: none;
 }
 
+.booking-modal-dialog .booking-telegram-reminder-caption {
+  margin-top: 8px;
+  color: var(--booking-form-muted-color);
+  font-family: "Mulish", "Segoe UI", Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .booking-modal-button {
   width: 100%;
   margin-top: 20px;
@@ -2795,6 +2805,22 @@ body.modal-open {
 
 #booking-form:has(.position-custom-field:not(.hidden-panel)) .booking-submit-block {
   grid-row: 7;
+}
+
+@media (min-width: 721px) {
+  #booking-form:not(:has(.position-custom-field:not(.hidden-panel))) .contact-telegram-field {
+    grid-row: 5;
+    margin-top: 70px;
+  }
+
+  #booking-form:not(:has(.position-custom-field:not(.hidden-panel))) .booking-submit-block {
+    grid-row: 5;
+    margin-top: 70px;
+  }
+
+  #booking-form:not(:has(.position-custom-field:not(.hidden-panel))):has(#client-comment:not(.hidden-panel)) .booking-submit-block {
+    margin-top: 140px;
+  }
 }
 
 #booking-form-panel .additional-attendees-field input,
