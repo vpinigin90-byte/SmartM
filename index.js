@@ -41,8 +41,8 @@ const MAX_PUBLIC_RANGE_DAYS = Number(process.env.MAX_PUBLIC_RANGE_DAYS) || 45;
 const MAX_ADMIN_RANGE_DAYS = Number(process.env.MAX_ADMIN_RANGE_DAYS) || 120;
 const LOGIN_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
 const PUBLIC_RATE_LIMIT = { limit: 60, windowMs: 10 * 60 * 1000 };
-const PUBLIC_BOOKING_IP_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
-const PUBLIC_BOOKING_EMAIL_RATE_LIMIT = { limit: 3, windowMs: 60 * 60 * 1000 };
+const PUBLIC_BOOKING_IP_RATE_LIMIT = { limit: 20, windowMs: 15 * 60 * 1000 };
+const PUBLIC_BOOKING_EMAIL_RATE_LIMIT = { limit: 6, windowMs: 60 * 60 * 1000 };
 const PUBLIC_BOOKING_DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 const LEARNING_OTP_RATE_LIMIT = { limit: 5, windowMs: 15 * 60 * 1000 };
 const LEARNING_EVENT_RATE_LIMIT = { limit: 180, windowMs: 10 * 60 * 1000 };
@@ -57,6 +57,7 @@ const MTS_LINK_ALLOWED_HOSTS = new Set(
 );
 const rateLimitBuckets = new Map();
 const publicBookingDuplicates = new Map();
+let configUpdateQueue = Promise.resolve();
 const PUBLIC_DEMO_DURATION_MINUTES = 60;
 const PUBLIC_DEMO_GAP_MINUTES = 30;
 const TELEGRAM_REMINDER_CHECK_MS = 60 * 1000;
@@ -2677,7 +2678,13 @@ async function loadConfig() {
 
 async function saveConfig(config) {
   await fs.mkdir(path.dirname(CONFIG_PATH), { recursive: true });
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(normalizeConfig(config), null, 2), "utf8");
+  const temporaryPath = `${CONFIG_PATH}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(temporaryPath, JSON.stringify(normalizeConfig(config), null, 2), "utf8");
+    await fs.rename(temporaryPath, CONFIG_PATH);
+  } finally {
+    await fs.unlink(temporaryPath).catch(() => null);
+  }
 }
 
 async function loadLearningData() {
@@ -2706,10 +2713,14 @@ async function updateLearningData(mutator) {
 }
 
 async function updateConfig(mutator) {
-  const currentConfig = await loadConfig();
-  const nextConfig = await mutator(currentConfig);
-  await saveConfig(nextConfig);
-  return nextConfig;
+  const operation = configUpdateQueue.then(async () => {
+    const currentConfig = await loadConfig();
+    const nextConfig = await mutator(currentConfig);
+    await saveConfig(nextConfig);
+    return normalizeConfig(nextConfig);
+  });
+  configUpdateQueue = operation.catch(() => null);
+  return operation;
 }
 
 async function readRequestBody(request, maxBytes = MAX_JSON_BODY_BYTES) {
@@ -3440,7 +3451,7 @@ async function putCalendarObject(email, password, eventUrl, eventIcs, options = 
       };
     } catch (error) {
       const statusCode = Number(error.statusCode) || 0;
-      if (statusCode === 412 && options.ifNoneMatch && attempt > 0) {
+      if (statusCode === 412 && options.ifNoneMatch) {
         try {
           const verificationResponse = await fetch(eventUrl, {
             method: "GET",
@@ -3456,9 +3467,7 @@ async function putCalendarObject(email, password, eventUrl, eventIcs, options = 
           if (
             verificationResponse.ok &&
             expectedEvent?.uid &&
-            existingEvent?.uid === expectedEvent.uid &&
-            existingEvent.start === expectedEvent.start &&
-            existingEvent.end === expectedEvent.end
+            existingEvent?.uid === expectedEvent.uid
           ) {
             return {
               ok: true,
@@ -3810,6 +3819,7 @@ function normalizeBookingPayload(body, rules) {
   const clientEmail = String(body.clientEmail || body.email || "").trim();
   const clientPhone = String(body.clientPhone || body.phone || "").trim();
   const clientTelegram = normalizeTelegramUserHandle(body.clientTelegram || body.telegram || "");
+  const telegramReminderRequested = Boolean(body.telegramReminderRequested);
   const companyName = String(body.companyName || body.company || "").trim();
   const position = String(body.position || body.clientPosition || "").trim();
   const additionalAttendees = normalizeAdditionalAttendees(body.additionalAttendees, clientEmail);
@@ -3858,6 +3868,7 @@ function normalizeBookingPayload(body, rules) {
     clientEmail,
     clientPhone,
     clientTelegram,
+    telegramReminderRequested,
     companyName,
     position,
     additionalAttendees,
@@ -4023,7 +4034,12 @@ function getTelegramBotStartUrl(settings, startPayload) {
 }
 
 function createTelegramReminderLink(booking, eventData, settings) {
-  if (!booking.clientTelegram || !settings?.enabled || !normalizeTelegramBotUsername(settings.botUsername)) {
+  if (
+    !booking.telegramReminderRequested
+    || !booking.clientTelegram
+    || !settings?.enabled
+    || !normalizeTelegramBotUsername(settings.botUsername)
+  ) {
     return null;
   }
   const token = createTelegramReminderToken();
@@ -4312,7 +4328,7 @@ async function createPublicBooking(booking, config = null) {
     attendees: [booking.clientEmail, ...booking.additionalAttendees],
     description,
   };
-  const telegramReminder = createTelegramReminderLink(booking, {
+  let telegramReminder = createTelegramReminderLink(booking, {
     uid,
     eventUrl,
     title: registryEvent.summary,
@@ -4332,8 +4348,10 @@ async function createPublicBooking(booking, config = null) {
       };
     });
   } catch (error) {
-    error.bookingStage = error.bookingStage || "registry-save";
-    throw error;
+    console.error("[Post-booking metadata]", {
+      message: String(error.message || "Unknown error").slice(0, 300),
+    });
+    telegramReminder = null;
   }
 
   return {
@@ -4415,7 +4433,11 @@ function handleCalDavError(response, error, fallbackMessage) {
 
 function handlePublicError(response, error) {
   setPublicCorsHeaders(response);
-  const statusCode = [400, 409, 429].includes(error.statusCode) ? error.statusCode : 500;
+  const statusCode = Number(error.statusCode) === 412
+    ? 409
+    : [400, 409, 429].includes(error.statusCode)
+      ? error.statusCode
+      : 500;
   const message =
     statusCode === 400
       ? "Проверьте данные бронирования."
