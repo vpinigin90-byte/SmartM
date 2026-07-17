@@ -2542,7 +2542,7 @@ body.modal-open {
 
 .booking-form-actions-bottom {
   grid-column: 2;
-  grid-row: 6;
+  grid-row: 7;
   margin-top: 4px;
 }
 
@@ -2565,14 +2565,14 @@ body.modal-open {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  width: fit-content;
+  width: 100%;
   min-height: 44px;
   margin-top: 10px;
   padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
-  color: var(--primary);
+  background: var(--secondary);
+  color: var(--foreground);
   cursor: pointer;
   font-family: "Mulish", "Segoe UI", Arial, sans-serif;
   font-size: 13px;
@@ -2592,22 +2592,35 @@ body.modal-open {
 }
 
 #booking-form-panel .telegram-toggle-visual {
-  width: 34px;
-  height: 20px;
+  position: relative;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 24px;
   border: 1px solid currentColor;
   border-radius: 999px;
-  background: transparent;
-  box-shadow: inset -14px 0 0 currentColor;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+#booking-form-panel .telegram-toggle-visual::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  transition: transform 150ms ease;
 }
 
 #booking-form-panel .booking-telegram-opt-in:has(input:checked) {
   border-color: var(--primary);
-  background: var(--primary);
-  color: #0b0d0e;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
 }
 
-#booking-form-panel .booking-telegram-opt-in:has(input:checked) .telegram-toggle-visual {
-  box-shadow: inset 14px 0 0 currentColor;
+#booking-form-panel .booking-telegram-opt-in:has(input:checked) .telegram-toggle-visual::after {
+  transform: translateX(18px);
 }
 
 #booking-form-panel .booking-telegram-opt-in:focus-within {
@@ -2817,6 +2830,15 @@ body.modal-open {
   white-space: nowrap;
 }
 
+#booking-form-panel .booking-telegram-opt-in span {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
 #booking-form-panel input,
 #booking-form-panel textarea,
 #booking-form-panel select {
@@ -2960,7 +2982,7 @@ body.modal-open {
 
 #booking-form-panel .booking-consent {
   grid-column: 2;
-  grid-row: 7;
+  grid-row: 8;
   width: 100%;
   max-width: none;
   margin: -4px 0 0;
@@ -2994,11 +3016,11 @@ body.modal-open {
 }
 
 #booking-form:has(.position-custom-field:not(.hidden-panel)) .booking-form-actions-bottom {
-  grid-row: 7;
+  grid-row: 8;
 }
 
 #booking-form:has(.position-custom-field:not(.hidden-panel)) .booking-consent {
-  grid-row: 8;
+  grid-row: 9;
 }
 
 @media (max-width: 720px) {
