@@ -3409,6 +3409,9 @@ async function putCalendarObject(email, password, eventUrl, eventIcs, options = 
 
   const retryDelays = [0, 350, 1000];
   let lastError = null;
+  const expectedEvent = options.ifNoneMatch
+    ? parseCalendarData(eventIcs, "", eventUrl, { eventUrl })[0] || null
+    : null;
 
   for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (retryDelays[attempt]) {
@@ -3436,8 +3439,40 @@ async function putCalendarObject(email, password, eventUrl, eventIcs, options = 
         etag: response.headers.get("etag"),
       };
     } catch (error) {
-      lastError = error;
       const statusCode = Number(error.statusCode) || 0;
+      if (statusCode === 412 && options.ifNoneMatch && attempt > 0) {
+        try {
+          const verificationResponse = await fetch(eventUrl, {
+            method: "GET",
+            headers: {
+              Authorization: headers.Authorization,
+              Accept: "text/calendar",
+              "User-Agent": headers["User-Agent"],
+            },
+          });
+          const existingIcs = await verificationResponse.text();
+          const existingEvent = parseCalendarData(existingIcs, "", eventUrl, { eventUrl })[0] || null;
+
+          if (
+            verificationResponse.ok &&
+            expectedEvent?.uid &&
+            existingEvent?.uid === expectedEvent.uid &&
+            existingEvent.start === expectedEvent.start &&
+            existingEvent.end === expectedEvent.end
+          ) {
+            return {
+              ok: true,
+              eventUrl,
+              etag: verificationResponse.headers.get("etag"),
+              recoveredAfterRetry: true,
+            };
+          }
+        } catch {
+          // Preserve the original CalDAV error when verification is unavailable.
+        }
+      }
+
+      lastError = error;
       const isTransient = !statusCode || statusCode === 408 || statusCode === 425 || statusCode === 429 || statusCode >= 500;
       if (!isTransient || attempt === retryDelays.length - 1) {
         throw error;
