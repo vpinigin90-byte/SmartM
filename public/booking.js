@@ -491,39 +491,54 @@ function renderDates() {
     visibleGridStart.setDate(visibleGridStart.getDate() + 7);
   }
 
-  for (const cursor = new Date(visibleGridStart); cursor <= calendarGridEnd; cursor.setDate(cursor.getDate() + 1)) {
-    const cellDate = new Date(cursor);
-    if (cellDate.getMonth() !== monthStart.getMonth()) {
-      html.push('<span class="date-option-spacer" aria-hidden="true"></span>');
+  for (const weekStart = new Date(visibleGridStart); weekStart <= calendarGridEnd; weekStart.setDate(weekStart.getDate() + 7)) {
+    const weekDates = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + index);
+      return date;
+    });
+    const hasAvailableSlot = weekDates.some((date) => (
+      date.getMonth() === monthStart.getMonth()
+      && availableDays.has(toLocalDayStart(date).toISOString())
+    ));
+
+    if (!hasAvailableSlot) {
       continue;
     }
-    const dayKey = toLocalDayStart(cellDate).toISOString();
-    const isPastDisplayOnly = cellDate < todayStart;
-    const isSameDayDisabled =
-      !state.meetingRules.allowSameDay && cellDate.getTime() === todayStart.getTime();
-    const isWeekdayDisabled = !workingDays.has(cellDate.getDay());
-    const isAvailable = availableDays.has(dayKey);
-    const isDisabledDisplayOnly = isPastDisplayOnly || isSameDayDisabled || isWeekdayDisabled;
 
-    if (isDisabledDisplayOnly) {
+    for (const cellDate of weekDates) {
+      if (cellDate.getMonth() !== monthStart.getMonth()) {
+        html.push('<span class="date-option-spacer" aria-hidden="true"></span>');
+        continue;
+      }
+      const dayKey = toLocalDayStart(cellDate).toISOString();
+      const isPastDisplayOnly = cellDate < todayStart;
+      const isSameDayDisabled =
+        !state.meetingRules.allowSameDay && cellDate.getTime() === todayStart.getTime();
+      const isWeekdayDisabled = !workingDays.has(cellDate.getDay());
+      const isAvailable = availableDays.has(dayKey);
+      const isDisabledDisplayOnly = isPastDisplayOnly || isSameDayDisabled || isWeekdayDisabled;
+
+      if (isDisabledDisplayOnly) {
+        html.push(
+          `<span class="date-option is-disabled" aria-hidden="true"><strong>${cellDate.getDate()}</strong></span>`,
+        );
+        continue;
+      }
+
+      const isSelected = state.selectedDayKey === dayKey;
+      const classes = ["date-option"];
+      if (isSelected) {
+        classes.push("active");
+      }
+      if (isAvailable) {
+        classes.push("has-slots");
+      }
+
       html.push(
-        `<span class="date-option is-disabled" aria-hidden="true"><strong>${cellDate.getDate()}</strong></span>`,
+        `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}" data-has-slots="${isAvailable ? "1" : "0"}"${isAvailable ? "" : " disabled"}><strong>${cellDate.getDate()}</strong></button>`,
       );
-      continue;
     }
-
-    const isSelected = state.selectedDayKey === dayKey;
-    const classes = ["date-option"];
-    if (isSelected) {
-      classes.push("active");
-    }
-    if (isAvailable) {
-      classes.push("has-slots");
-    }
-
-    html.push(
-      `<button class="${classes.join(" ")}" type="button" data-day="${escapeHtml(dayKey)}" data-has-slots="${isAvailable ? "1" : "0"}"${isAvailable ? "" : " disabled"}><strong>${cellDate.getDate()}</strong></button>`,
-    );
   }
 
   if (!html.length) {
