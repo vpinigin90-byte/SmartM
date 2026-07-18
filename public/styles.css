@@ -2437,8 +2437,15 @@ body.modal-open {
 .booking-form {
   grid-area: form;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 28px;
+  gap: 28px;
   align-items: start;
+  min-width: 0;
+}
+
+.booking-form-column {
+  display: grid;
+  gap: 14px;
+  align-content: start;
   min-width: 0;
 }
 
@@ -2712,70 +2719,10 @@ body.modal-open {
   transform: translate(50%, 0);
 }
 
-#booking-form-panel .booking-form-contacts-title {
-  grid-column: 1;
-  grid-row: 1;
-}
-
 #booking-form-panel .booking-form-company-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  grid-column: 2;
-  grid-row: 1;
-}
-
-#booking-form-panel .contact-first-name-field {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-#booking-form-panel .contact-last-name-field {
-  grid-column: 1;
-  grid-row: 3;
-}
-
-#booking-form-panel .contact-email-field {
-  grid-column: 1;
-  grid-row: 4;
-}
-
-#booking-form-panel .contact-phone-field {
-  grid-column: 1;
-  grid-row: 5;
-}
-
-#booking-form-panel .contact-telegram-field {
-  grid-column: 1;
-  grid-row: 6;
-}
-
-#booking-form-panel .company-name-field {
-  grid-column: 2;
-  grid-row: 2;
-  width: calc(100% - 34px);
-}
-
-#booking-form-panel .position-field {
-  grid-column: 2;
-  grid-row: 3;
-  width: calc(100% - 34px);
-}
-
-#booking-form-panel .position-custom-field {
-  grid-column: 2;
-  grid-row: 4;
-  width: calc(100% - 34px);
-}
-
-#booking-form-panel .external-meeting-url-field {
-  grid-column: 2;
-  grid-row: 4;
-  width: calc(100% - 34px);
-}
-
-#booking-form:has(.position-custom-field:not(.hidden-panel)) .external-meeting-url-field {
-  grid-row: 5;
 }
 
 #booking-form-panel .field > .external-meeting-url-note {
@@ -2788,58 +2735,22 @@ body.modal-open {
   line-height: 1.35;
 }
 
-#booking-form-panel .additional-attendees-field,
-#booking-form-panel .comment-field {
-  grid-column: 2;
-}
-
 #booking-form-panel .additional-attendees-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px;
   column-gap: 10px;
-  grid-row: 5;
-}
-
-#booking-form:has(.position-custom-field:not(.hidden-panel)) .additional-attendees-field {
-  grid-row: 6;
-}
-
-#booking-form-panel .comment-field {
-  grid-row: 6;
-  width: calc(100% - 34px);
-}
-
-#booking-form:has(.position-custom-field:not(.hidden-panel)) .comment-field {
-  grid-row: 7;
 }
 
 #booking-form-panel .booking-submit-block {
   display: grid;
-  grid-column: 2;
-  grid-row: 7;
   gap: 10px;
   align-self: start;
-  width: calc(100% - 34px);
+  width: 100%;
   margin-top: -4px;
 }
 
 #booking-form-panel .booking-form-status {
   margin: 0;
-}
-
-#booking-form:has(.position-custom-field:not(.hidden-panel)) .booking-submit-block {
-  grid-row: 8;
-}
-
-@media (min-width: 721px) {
-  #booking-form:not(:has(.position-custom-field:not(.hidden-panel))) .booking-submit-block {
-    grid-row: 6;
-    margin-top: 70px;
-  }
-
-  #booking-form:not(:has(.position-custom-field:not(.hidden-panel))):has(#client-comment:not(.hidden-panel)) .booking-submit-block {
-    margin-top: 140px;
-  }
 }
 
 #booking-form-panel .additional-attendees-field input,
@@ -3117,80 +3028,8 @@ body.modal-open {
     grid-template-columns: 1fr;
   }
 
-  #booking-form-panel .booking-form-section-title,
-  #booking-form-panel .booking-form > .field,
-  #booking-form-panel .booking-submit-block {
-    grid-column: 1;
-    grid-row: auto;
-  }
-
-  #booking-form-panel .booking-form-contacts-title {
-    order: 1;
-  }
-
-  #booking-form-panel .contact-first-name-field {
-    order: 2;
-  }
-
-  #booking-form-panel .contact-last-name-field {
-    order: 3;
-  }
-
-  #booking-form-panel .contact-email-field {
-    order: 4;
-  }
-
-  #booking-form-panel .contact-phone-field {
-    order: 5;
-  }
-
-  #booking-form-panel .booking-form-company-title {
-    order: 7;
-  }
-
-  #booking-form-panel .contact-telegram-field {
-    order: 6;
-  }
-
-  #booking-form-panel .company-name-field {
-    order: 8;
-  }
-
-  #booking-form-panel .position-field {
-    order: 9;
-  }
-
-  #booking-form-panel .position-custom-field {
-    order: 10;
-  }
-
-  #booking-form-panel .external-meeting-url-field {
-    order: 11;
-  }
-
-  #booking-form-panel .additional-attendees-field {
-    order: 12;
-  }
-
-  #booking-form-panel .comment-field {
-    order: 13;
-  }
-
-  #booking-form-panel .booking-submit-block {
-    order: 14;
-  }
-
-  #booking-form-panel .additional-attendees-field,
-  #booking-form-panel .comment-field,
-  #booking-form-panel .booking-submit-block {
-    grid-column: 1;
-  }
-
-  #booking-form-panel .company-name-field,
-  #booking-form-panel .position-field,
-  #booking-form-panel .position-custom-field,
-  #booking-form-panel .external-meeting-url-field,
-  #booking-form-panel .comment-field,
+  #booking-form-panel .booking-form-column,
+  #booking-form-panel .booking-form-column > .field,
   #booking-form-panel .booking-submit-block {
     width: 100%;
   }

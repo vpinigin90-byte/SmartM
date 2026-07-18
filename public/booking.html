@@ -68,135 +68,140 @@
               <input id="booking-end" type="hidden" />
               <input id="booking-website" class="booking-honeypot" type="text" name="website" autocomplete="off" tabindex="-1" aria-hidden="true" />
 
-              <h3 class="booking-form-section-title booking-form-contacts-title">Мои контакты</h3>
-              <h3 class="booking-form-section-title booking-form-company-title">
-                <span>Данные компании</span>
-                <span
-                  class="info-tooltip"
-                  tabindex="0"
-                  aria-label="Эти данные помогут нам подготовиться ко встрече с вами и показать максимально релевантные примеры проектов"
-                  data-tooltip="Эти данные помогут нам подготовиться ко встрече с вами и показать максимально релевантные примеры проектов"
-                >i</span>
-              </h3>
+              <div class="booking-form-column booking-contacts-column">
+                <h3 class="booking-form-section-title booking-form-contacts-title">Мои контакты</h3>
 
-              <label class="field contact-first-name-field">
-                <span class="field-label">Имя *</span>
-                <input id="client-first-name" type="text" autocomplete="given-name" placeholder="Имя *" required />
-                <small id="client-first-name-error" class="field-error" aria-live="polite"></small>
-              </label>
-
-              <label class="field contact-last-name-field">
-                <span class="field-label">Фамилия *</span>
-                <input id="client-last-name" type="text" autocomplete="family-name" placeholder="Фамилия *" required />
-                <small id="client-last-name-error" class="field-error" aria-live="polite"></small>
-              </label>
-
-              <label class="field contact-email-field">
-                <span class="field-label">E-mail *</span>
-                <input id="client-email" type="email" autocomplete="email" inputmode="email" spellcheck="false" placeholder="E-mail *" required />
-                <small id="client-email-error" class="field-error" aria-live="polite"></small>
-              </label>
-
-              <label class="field contact-phone-field">
-                <span class="field-label">Телефон *</span>
-                <div class="phone-field">
-                  <select id="client-phone-country" class="phone-country" aria-label="Страна номера">
-                    <option value="RU">Россия +7</option>
-                    <option value="KZ">Казахстан +7</option>
-                    <option value="BY">Беларусь +375</option>
-                    <option value="UZ">Узбекистан +998</option>
-                    <option value="AM">Армения +374</option>
-                  </select>
-                  <input id="client-phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(999)-999-99-99" required />
-                </div>
-                <small id="client-phone-error" class="field-error" aria-live="polite"></small>
-              </label>
-
-              <div class="field contact-telegram-field">
-                <span class="field-label">Telegram</span>
-                <input id="client-telegram" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Telegram" />
-                <small id="client-telegram-error" class="field-error" aria-live="polite"></small>
-                <label id="booking-telegram-opt-in" class="booking-telegram-opt-in">
-                  <input id="client-telegram-reminders" type="checkbox" />
-                  <span class="telegram-toggle-visual" aria-hidden="true"></span>
-                  <span class="telegram-toggle-text">Напомнить о&nbsp;встрече в&nbsp;Телеграм</span>
+                <label class="field contact-first-name-field">
+                  <span class="field-label">Имя *</span>
+                  <input id="client-first-name" type="text" autocomplete="given-name" placeholder="Имя *" required />
+                  <small id="client-first-name-error" class="field-error" aria-live="polite"></small>
                 </label>
+
+                <label class="field contact-last-name-field">
+                  <span class="field-label">Фамилия *</span>
+                  <input id="client-last-name" type="text" autocomplete="family-name" placeholder="Фамилия *" required />
+                  <small id="client-last-name-error" class="field-error" aria-live="polite"></small>
+                </label>
+
+                <label class="field contact-email-field">
+                  <span class="field-label">E-mail *</span>
+                  <input id="client-email" type="email" autocomplete="email" inputmode="email" spellcheck="false" placeholder="E-mail *" required />
+                  <small id="client-email-error" class="field-error" aria-live="polite"></small>
+                </label>
+
+                <label class="field contact-phone-field">
+                  <span class="field-label">Телефон *</span>
+                  <div class="phone-field">
+                    <select id="client-phone-country" class="phone-country" aria-label="Страна номера">
+                      <option value="RU">Россия +7</option>
+                      <option value="KZ">Казахстан +7</option>
+                      <option value="BY">Беларусь +375</option>
+                      <option value="UZ">Узбекистан +998</option>
+                      <option value="AM">Армения +374</option>
+                    </select>
+                    <input id="client-phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(999)-999-99-99" required />
+                  </div>
+                  <small id="client-phone-error" class="field-error" aria-live="polite"></small>
+                </label>
+
+                <div class="field contact-telegram-field">
+                  <span class="field-label">Telegram</span>
+                  <input id="client-telegram" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Telegram" />
+                  <small id="client-telegram-error" class="field-error" aria-live="polite"></small>
+                  <label id="booking-telegram-opt-in" class="booking-telegram-opt-in">
+                    <input id="client-telegram-reminders" type="checkbox" />
+                    <span class="telegram-toggle-visual" aria-hidden="true"></span>
+                    <span class="telegram-toggle-text">Напомнить о&nbsp;встрече в&nbsp;Телеграм</span>
+                  </label>
+                </div>
               </div>
 
-              <label class="field company-name-field">
-                <span class="field-label">Наименование компании *</span>
-                <input id="company-name" type="text" autocomplete="organization" placeholder="Наименование компании *" required />
-                <small id="company-name-error" class="field-error" aria-live="polite"></small>
-              </label>
+              <div class="booking-form-column booking-company-column">
+                <h3 class="booking-form-section-title booking-form-company-title">
+                  <span>Данные компании</span>
+                  <span
+                    class="info-tooltip"
+                    tabindex="0"
+                    aria-label="Эти данные помогут нам подготовиться ко встрече с вами и показать максимально релевантные примеры проектов"
+                    data-tooltip="Эти данные помогут нам подготовиться ко встрече с вами и показать максимально релевантные примеры проектов"
+                  >i</span>
+                </h3>
 
-              <label class="field position-field">
-                <span class="field-label">Должность</span>
-                <select id="client-position">
-                  <option value="" selected>Должность</option>
-                  <option value="Разработчик курсов">Разработчик курсов</option>
-                  <option value="Методист онлайн-курсов">Методист онлайн-курсов</option>
-                  <option value="Бизнес-тренер">Бизнес-тренер</option>
-                  <option value="Руководитель обучения">Руководитель обучения</option>
-                  <option value="HR-директор">HR-директор</option>
-                  <option value="Другое">Другое</option>
-                </select>
-                <small id="client-position-error" class="field-error" aria-live="polite"></small>
-              </label>
+                <label class="field company-name-field">
+                  <span class="field-label">Наименование компании *</span>
+                  <input id="company-name" type="text" autocomplete="organization" placeholder="Наименование компании *" required />
+                  <small id="company-name-error" class="field-error" aria-live="polite"></small>
+                </label>
 
-              <label id="custom-position-field" class="field position-custom-field hidden-panel">
-                <span class="field-label">Должность вручную</span>
-                <input id="custom-position" type="text" placeholder="Укажите должность" />
-                <small id="custom-position-error" class="field-error" aria-live="polite"></small>
-              </label>
+                <label class="field position-field">
+                  <span class="field-label">Должность</span>
+                  <select id="client-position">
+                    <option value="" selected>Должность</option>
+                    <option value="Разработчик курсов">Разработчик курсов</option>
+                    <option value="Методист онлайн-курсов">Методист онлайн-курсов</option>
+                    <option value="Бизнес-тренер">Бизнес-тренер</option>
+                    <option value="Руководитель обучения">Руководитель обучения</option>
+                    <option value="HR-директор">HR-директор</option>
+                    <option value="Другое">Другое</option>
+                  </select>
+                  <small id="client-position-error" class="field-error" aria-live="polite"></small>
+                </label>
 
-              <label class="field external-meeting-url-field">
-                <span class="field-label">Ссылка на встречу на вашей платформе</span>
-                <input
-                  id="external-meeting-url"
-                  type="url"
-                  inputmode="url"
-                  autocomplete="url"
-                  spellcheck="false"
-                  placeholder="Ссылка на ваш сервис видеовстреч"
-                />
-                <small id="external-meeting-url-error" class="field-error" aria-live="polite"></small>
-                <small class="external-meeting-url-note">
-                  По&nbsp;умолчанию для видеовстреч мы&nbsp;используем MTS Link, но&nbsp;вы можете
-                  добавить ссылку на&nbsp;вашу платформу для вашего удобства.
-                </small>
-              </label>
+                <label id="custom-position-field" class="field position-custom-field hidden-panel">
+                  <span class="field-label">Должность вручную</span>
+                  <input id="custom-position" type="text" placeholder="Укажите должность" />
+                  <small id="custom-position-error" class="field-error" aria-live="polite"></small>
+                </label>
 
-              <label class="field additional-attendees-field">
-                <span>Добавить других участников встречи</span>
-                <input id="additional-attendees" type="text" placeholder="Добавить e-mail других ваших коллег" />
-                <span
-                  class="info-tooltip field-info-tooltip"
-                  tabindex="0"
-                  aria-label="Добавьте сразу, всех коллег, которым тоже важно увидеть возможности сервиса"
-                  data-tooltip="Добавьте сразу, всех коллег, которым тоже важно увидеть возможности сервиса"
-                >i</span>
-                <small>Добавьте ваших коллег, кому тоже важно быть на встрече</small>
-              </label>
+                <label class="field external-meeting-url-field">
+                  <span class="field-label">Ссылка на встречу на вашей платформе</span>
+                  <input
+                    id="external-meeting-url"
+                    type="url"
+                    inputmode="url"
+                    autocomplete="url"
+                    spellcheck="false"
+                    placeholder="Ссылка на ваш сервис видеовстреч"
+                  />
+                  <small id="external-meeting-url-error" class="field-error" aria-live="polite"></small>
+                  <small class="external-meeting-url-note">
+                    По&nbsp;умолчанию для видеовстреч мы&nbsp;используем MTS Link, но&nbsp;вы можете
+                    добавить ссылку на&nbsp;вашу платформу для вашего удобства.
+                  </small>
+                </label>
 
-              <label class="field comment-field">
-                <span>Комментарий</span>
-                <button id="add-comment-button" class="comment-toggle-button" type="button">Добавить комментарий</button>
-                <textarea id="client-comment" class="hidden-panel" rows="3" placeholder="Укажите заранее, какие вопросы вы хотите обсудить на встрече и какие возможности приоритетно рассмотреть."></textarea>
-              </label>
+                <label class="field additional-attendees-field">
+                  <span>Добавить других участников встречи</span>
+                  <input id="additional-attendees" type="text" placeholder="Добавить e-mail других ваших коллег" />
+                  <span
+                    class="info-tooltip field-info-tooltip"
+                    tabindex="0"
+                    aria-label="Добавьте сразу, всех коллег, которым тоже важно увидеть возможности сервиса"
+                    data-tooltip="Добавьте сразу, всех коллег, которым тоже важно увидеть возможности сервиса"
+                  >i</span>
+                  <small>Добавьте ваших коллег, кому тоже важно быть на встрече</small>
+                </label>
 
-              <div class="booking-submit-block">
-                <div class="booking-form-actions booking-form-actions-bottom">
-                  <button class="secondary-button booking-cancel-button" type="button">Отменить</button>
-                  <button id="book-slot-button" class="primary-button" type="submit">Назначить встречу</button>
+                <label class="field comment-field">
+                  <span>Комментарий</span>
+                  <button id="add-comment-button" class="comment-toggle-button" type="button">Добавить комментарий</button>
+                  <textarea id="client-comment" class="hidden-panel" rows="3" placeholder="Укажите заранее, какие вопросы вы хотите обсудить на встрече и какие возможности приоритетно рассмотреть."></textarea>
+                </label>
+
+                <div class="booking-submit-block">
+                  <div class="booking-form-actions booking-form-actions-bottom">
+                    <button class="secondary-button booking-cancel-button" type="button">Отменить</button>
+                    <button id="book-slot-button" class="primary-button" type="submit">Назначить встречу</button>
+                  </div>
+
+                  <div id="booking-form-status" class="status booking-form-status" aria-live="polite"></div>
+
+                  <p class="booking-consent">
+                    Нажимая кнопку «Назначить&nbsp;встречу», я&nbsp;подтверждаю, что даю согласие
+                    на&nbsp;обработку и&nbsp;передачу персональных данных в&nbsp;соответствии с
+                    <a href="https://scroll-tool.ru/processingpolicy" target="_blank" rel="noopener noreferrer">Политикой&nbsp;конфиденциальности</a>.
+                  </p>
                 </div>
-
-                <div id="booking-form-status" class="status booking-form-status" aria-live="polite"></div>
-
-                <p class="booking-consent">
-                  Нажимая кнопку «Назначить&nbsp;встречу», я&nbsp;подтверждаю, что даю согласие
-                  на&nbsp;обработку и&nbsp;передачу персональных данных в&nbsp;соответствии с
-                  <a href="https://scroll-tool.ru/processingpolicy" target="_blank" rel="noopener noreferrer">Политикой&nbsp;конфиденциальности</a>.
-                </p>
               </div>
             </form>
           </div>
