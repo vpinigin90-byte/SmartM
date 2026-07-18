@@ -3,39 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartM Admin</title>
+    <title>Вход в админ-панель | Scrolltool</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="shell admin-shell">
-      <section id="login-view" class="auth-card">
-        <div class="brand-lockup">
-          <div class="brand-mark" aria-hidden="true">
-            <img
-              src="https://static.tildacdn.com/tild6430-6165-4363-b936-623362386239/NEW_LOGO_SCROLL.svg"
-              alt=""
-            />
-          </div>
-          <div>
-            <p class="eyebrow">SmartM Admin</p>
+      <section id="login-view" class="auth-card admin-login-card">
+        <header class="admin-login-brand">
+          <img
+            src="https://static.tildacdn.com/tild6430-6165-4363-b936-623362386239/NEW_LOGO_SCROLL.svg"
+            alt="Scrolltool"
+          />
+        </header>
+        <div class="admin-login-content">
+          <div class="admin-login-copy">
             <h1>Вход в админ-панель</h1>
+            <p class="summary">Служебный доступ к админ-панели администратора</p>
           </div>
+          <form id="login-form" class="form admin-login-form">
+            <label class="field">
+              <span>Логин</span>
+              <input id="admin-username" type="text" autocomplete="username" value="admin" required />
+            </label>
+            <label class="field">
+              <span>Пароль</span>
+              <input id="admin-password" type="password" autocomplete="current-password" required />
+            </label>
+            <button id="login-button" class="primary-button" type="submit">Войти</button>
+          </form>
+          <div id="login-status" class="status" aria-live="polite"></div>
         </div>
-        <p class="summary">
-          Служебный доступ к сотрудникам, календарям и правилам доступности.
-        </p>
-        <form id="login-form" class="form">
-          <label class="field">
-            <span>Логин</span>
-            <input id="admin-username" type="text" autocomplete="username" value="admin" required />
-          </label>
-          <label class="field">
-            <span>Пароль</span>
-            <input id="admin-password" type="password" autocomplete="current-password" required />
-          </label>
-          <button id="login-button" class="primary-button" type="submit">Войти</button>
-        </form>
-        <div id="login-status" class="status" aria-live="polite"></div>
       </section>
 
       <section id="admin-view" class="card hidden-panel">
