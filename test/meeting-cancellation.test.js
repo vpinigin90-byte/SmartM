@@ -53,6 +53,27 @@ test("marks missing integrations as not required", () => {
   assert.equal(isCancellationJobComplete(job), true);
 });
 
+test("keeps Telegram cancellation but skips MTS cleanup for an external meeting", () => {
+  const job = createMeetingCancellationJob({
+    id: "12345678-1234-4234-8234-123456789014",
+    meeting: {
+      ...meeting,
+      meetingUrl: "https://video.example.com/room",
+      meetingProvider: "external",
+      mtsLink: null,
+    },
+    reminder: {
+      clientChatId: "8950699427",
+      clientName: "Анна",
+    },
+    now: "2026-07-18T12:00:00.000Z",
+  });
+
+  assert.equal(job.mtsStatus, "not_required");
+  assert.equal(job.telegramStatus, "pending");
+  assert.equal(job.eventSessionId, null);
+});
+
 test("uses increasing retry delays and honors Retry-After", () => {
   const now = Date.parse("2026-07-18T12:00:00.000Z");
 

@@ -2768,6 +2768,16 @@ body.modal-open {
   width: calc(100% - 34px);
 }
 
+#booking-form-panel .external-meeting-url-field {
+  grid-column: 2;
+  grid-row: 4;
+  width: calc(100% - 34px);
+}
+
+#booking-form:has(.position-custom-field:not(.hidden-panel)) .external-meeting-url-field {
+  grid-row: 5;
+}
+
 #booking-form-panel .additional-attendees-field,
 #booking-form-panel .comment-field {
   grid-column: 2;
@@ -2777,26 +2787,26 @@ body.modal-open {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px;
   column-gap: 10px;
-  grid-row: 4;
+  grid-row: 5;
 }
 
 #booking-form:has(.position-custom-field:not(.hidden-panel)) .additional-attendees-field {
-  grid-row: 5;
+  grid-row: 6;
 }
 
 #booking-form-panel .comment-field {
-  grid-row: 5;
+  grid-row: 6;
   width: calc(100% - 34px);
 }
 
 #booking-form:has(.position-custom-field:not(.hidden-panel)) .comment-field {
-  grid-row: 6;
+  grid-row: 7;
 }
 
 #booking-form-panel .booking-submit-block {
   display: grid;
   grid-column: 2;
-  grid-row: 6;
+  grid-row: 7;
   gap: 10px;
   align-self: start;
   width: calc(100% - 34px);
@@ -2808,17 +2818,12 @@ body.modal-open {
 }
 
 #booking-form:has(.position-custom-field:not(.hidden-panel)) .booking-submit-block {
-  grid-row: 7;
+  grid-row: 8;
 }
 
 @media (min-width: 721px) {
-  #booking-form:not(:has(.position-custom-field:not(.hidden-panel))) .contact-telegram-field {
-    grid-row: 5;
-    margin-top: 70px;
-  }
-
   #booking-form:not(:has(.position-custom-field:not(.hidden-panel))) .booking-submit-block {
-    grid-row: 5;
+    grid-row: 6;
     margin-top: 70px;
   }
 
@@ -3149,16 +3154,20 @@ body.modal-open {
     order: 10;
   }
 
-  #booking-form-panel .additional-attendees-field {
+  #booking-form-panel .external-meeting-url-field {
     order: 11;
   }
 
-  #booking-form-panel .comment-field {
+  #booking-form-panel .additional-attendees-field {
     order: 12;
   }
 
-  #booking-form-panel .booking-submit-block {
+  #booking-form-panel .comment-field {
     order: 13;
+  }
+
+  #booking-form-panel .booking-submit-block {
+    order: 14;
   }
 
   #booking-form-panel .additional-attendees-field,
@@ -3170,6 +3179,7 @@ body.modal-open {
   #booking-form-panel .company-name-field,
   #booking-form-panel .position-field,
   #booking-form-panel .position-custom-field,
+  #booking-form-panel .external-meeting-url-field,
   #booking-form-panel .comment-field,
   #booking-form-panel .booking-submit-block {
     width: 100%;

@@ -30,6 +30,7 @@ const telegramReminderCheckbox = document.querySelector("#client-telegram-remind
 const companyNameInput = document.querySelector("#company-name");
 const positionSelect = document.querySelector("#client-position");
 const customPositionInput = document.querySelector("#custom-position");
+const externalMeetingUrlInput = document.querySelector("#external-meeting-url");
 const additionalAttendeesInput = document.querySelector("#additional-attendees");
 const clientCommentInput = document.querySelector("#client-comment");
 const addCommentButton = document.querySelector("#add-comment-button");
@@ -102,6 +103,7 @@ const FIELD_ERRORS = {
   company: document.querySelector("#company-name-error"),
   position: document.querySelector("#client-position-error"),
   customPosition: document.querySelector("#custom-position-error"),
+  externalMeetingUrl: document.querySelector("#external-meeting-url-error"),
 };
 
 
@@ -194,6 +196,29 @@ function validateCustomPositionField() {
   return validateRequiredText(customPositionInput, FIELD_ERRORS.customPosition, "Укажите свою должность.");
 }
 
+function validateExternalMeetingUrlField() {
+  const value = externalMeetingUrlInput?.value.trim() || "";
+  let error = "";
+  if (value) {
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "https:") {
+        error = "Ссылка должна использовать HTTPS.";
+      } else if (!parsed.hostname || parsed.username || parsed.password) {
+        error = "Укажите безопасную ссылку без логина и пароля.";
+      } else if (value.length > 2048) {
+        error = "Ссылка слишком длинная.";
+      }
+    } catch {
+      error = "Укажите корректную ссылку на встречу.";
+    }
+  }
+  if (externalMeetingUrlInput) {
+    setFieldState(externalMeetingUrlInput, FIELD_ERRORS.externalMeetingUrl, error);
+  }
+  return !error;
+}
+
 function validateBookingForm() {
   state.validationStarted = true;
   const checks = [
@@ -204,6 +229,7 @@ function validateBookingForm() {
     validateTelegramField,
     () => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании."),
     validateCustomPositionField,
+    validateExternalMeetingUrlField,
   ];
 
   let firstInvalid = null;
@@ -953,6 +979,7 @@ async function submitBooking(event) {
   const position = getPositionValue();
   const clientTelegram = clientTelegramInput?.value.trim() || "";
   const telegramReminderRequested = Boolean(telegramReminderCheckbox?.checked);
+  const externalMeetingUrl = externalMeetingUrlInput?.value.trim() || "";
   setStatus("", "");
   setSubmitButtonsDisabled(true);
 
@@ -970,6 +997,7 @@ async function submitBooking(event) {
         telegramReminderRequested,
         companyName: companyNameInput.value.trim(),
         position,
+        externalMeetingUrl,
         additionalAttendees: additionalAttendeesInput.value.trim(),
         comment: clientCommentInput.value.trim(),
         website: bookingWebsiteInput?.value || "",
@@ -1100,6 +1128,10 @@ companyNameInput.addEventListener("input", () => validateAfterSubmit(() => valid
 companyNameInput.addEventListener("blur", () => validateAfterSubmit(() => validateRequiredText(companyNameInput, FIELD_ERRORS.company, "Укажите наименование компании.")));
 customPositionInput.addEventListener("input", () => validateAfterSubmit(validateCustomPositionField));
 customPositionInput.addEventListener("blur", () => validateAfterSubmit(validateCustomPositionField));
+if (externalMeetingUrlInput) {
+  externalMeetingUrlInput.addEventListener("input", () => validateAfterSubmit(validateExternalMeetingUrlField));
+  externalMeetingUrlInput.addEventListener("blur", () => validateAfterSubmit(validateExternalMeetingUrlField));
+}
 if (addCommentButton) {
   addCommentButton.addEventListener("click", () => setCommentFieldOpen(true));
 }

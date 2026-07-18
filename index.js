@@ -14,6 +14,10 @@ const {
   isCancellationJobComplete,
   normalizeMeetingCancellationJobs,
 } = require("./meeting-cancellation");
+const {
+  normalizeExternalMeetingUrl,
+  shouldCreateMtsLink,
+} = require("./meeting-link");
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT) || 3000;
@@ -891,6 +895,10 @@ function normalizeMeetingRegistry(source = []) {
       status: entry?.status === "deleted" ? "deleted" : "active",
       lastSeenAt: String(entry?.lastSeenAt || "").trim() || null,
       deletedAt: String(entry?.deletedAt || "").trim() || null,
+      meetingUrl: String(entry?.meetingUrl || "").trim() || null,
+      meetingProvider: ["external", "mts-link"].includes(entry?.meetingProvider)
+        ? entry.meetingProvider
+        : null,
       mtsLink: entry?.mtsLink && typeof entry.mtsLink === "object" ? { eventId: String(entry.mtsLink.eventId || "").trim() || null, eventSessionId: String(entry.mtsLink.eventSessionId || "").trim() || null } : null,
     }))
     .filter((entry) => entry.id && entry.start && entry.end)
@@ -917,6 +925,9 @@ function normalizeTelegramReminderRecords(source = []) {
       clientChatUsername: safeNormalizeTelegramUserHandle(record?.clientChatUsername || ""),
       companyName: String(record?.companyName || "").trim().slice(0, 160),
       meetingUrl: String(record?.meetingUrl || "").trim() || null,
+      meetingProvider: ["external", "mts-link"].includes(record?.meetingProvider)
+        ? record.meetingProvider
+        : null,
       createdAt: String(record?.createdAt || "").trim() || null,
       connectedAt: String(record?.connectedAt || "").trim() || null,
       lastMessageAt: String(record?.lastMessageAt || "").trim() || null,
@@ -3875,6 +3886,9 @@ function normalizeBookingPayload(body, rules) {
   const telegramReminderRequested = Boolean(body.telegramReminderRequested);
   const companyName = String(body.companyName || body.company || "").trim();
   const position = String(body.position || body.clientPosition || "").trim();
+  const externalMeetingUrl = normalizeExternalMeetingUrl(
+    body.externalMeetingUrl || body.customMeetingUrl || "",
+  );
   const additionalAttendees = normalizeAdditionalAttendees(body.additionalAttendees, clientEmail);
   const start = String(body.start || body.startIso || "").trim();
   const end = String(body.end || body.endIso || "").trim();
@@ -3924,6 +3938,7 @@ function normalizeBookingPayload(body, rules) {
     telegramReminderRequested,
     companyName,
     position,
+    externalMeetingUrl,
     additionalAttendees,
     start,
     end,
@@ -4056,6 +4071,8 @@ function mapCalendarEventToRegistry(event, employee, previousEntry = null) {
     status: "active",
     lastSeenAt: new Date().toISOString(),
     deletedAt: null,
+    meetingUrl: previousEntry?.meetingUrl || null,
+    meetingProvider: previousEntry?.meetingProvider || null,
     mtsLink: previousEntry?.mtsLink || null,
   };
 }
@@ -4284,6 +4301,7 @@ function createTelegramReminderLink(booking, eventData, settings) {
       clientChatUsername: "",
       companyName: booking.companyName,
       meetingUrl: eventData.meetingUrl || null,
+      meetingProvider: eventData.meetingProvider || null,
       createdAt: now,
       connectedAt: null,
       lastMessageAt: null,
@@ -4432,7 +4450,9 @@ function buildTelegramAdminReminder(record, offset) {
     record.clientPhone ? `Телефон: ${record.clientPhone}` : "",
     record.clientTelegram ? `Telegram: ${record.clientTelegram}` : "",
     record.companyName ? `Компания: ${record.companyName}` : "",
-    record.meetingUrl ? `Ссылка MTS Link: ${record.meetingUrl}` : "",
+    record.meetingUrl
+      ? `${record.meetingProvider === "external" ? "Ссылка клиента" : "Ссылка MTS Link"}: ${record.meetingUrl}`
+      : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -4621,7 +4641,7 @@ async function createPublicBooking(booking, config = null) {
   const mtsLinkSettings = currentConfig.mtsLink || normalizeMtsLinkSettings();
   let mtsLinkMeeting = null;
 
-  if (mtsLinkSettings.enabled) {
+  if (shouldCreateMtsLink(booking, mtsLinkSettings)) {
     try {
       mtsLinkMeeting = await createMtsLinkMeeting(booking, target.employee, mtsLinkSettings);
       await updateConfig((currentConfig) => ({
@@ -4655,6 +4675,12 @@ async function createPublicBooking(booking, config = null) {
     }
   }
 
+  const meetingUrl = booking.externalMeetingUrl || mtsLinkMeeting?.meetingUrl || "";
+  const meetingProvider = booking.externalMeetingUrl
+    ? "external"
+    : mtsLinkMeeting?.meetingUrl
+      ? "mts-link"
+      : null;
   const descriptionSections = [
     "Заявка на демо:",
     booking.clientName,
@@ -4669,8 +4695,11 @@ async function createPublicBooking(booking, config = null) {
     booking.comment ? `Комментарий: ${booking.comment}` : "",
   ];
 
-  if (mtsLinkMeeting?.meetingUrl && mtsLinkSettings.insertLinkIntoDescription) {
-    descriptionSections.push(`Ссылка на встречу: ${mtsLinkMeeting.meetingUrl}`);
+  if (
+    meetingUrl
+    && (meetingProvider === "external" || mtsLinkSettings.insertLinkIntoDescription)
+  ) {
+    descriptionSections.push(`Ссылка на встречу: ${meetingUrl}`);
   }
 
   const attachments = currentConfig.meetingFiles.map((file) => ({
@@ -4690,7 +4719,10 @@ async function createPublicBooking(booking, config = null) {
     summary: `Демо Scrolltool для ${booking.companyName || booking.clientName}`,
     description,
     location: "Онлайн",
-    conferenceUrl: mtsLinkSettings.insertLinkIntoLocation ? mtsLinkMeeting?.meetingUrl || "" : "",
+    conferenceUrl:
+      meetingProvider === "external" || mtsLinkSettings.insertLinkIntoLocation
+        ? meetingUrl
+        : "",
     start: booking.start,
     end: booking.end,
     attachments,
@@ -4730,12 +4762,15 @@ async function createPublicBooking(booking, config = null) {
     uid,
     eventUrl,
     title: registryEvent.summary,
-    meetingUrl: mtsLinkMeeting?.meetingUrl || null,
+    meetingUrl: meetingUrl || null,
+    meetingProvider,
   }, currentConfig.telegram);
   try {
     await updateConfig((currentConfig) => {
       const entry = mapCalendarEventToRegistry(registryEvent, target.employee);
       entry.source = "api";
+      entry.meetingUrl = meetingUrl || null;
+      entry.meetingProvider = meetingProvider;
       entry.mtsLink = mtsLinkMeeting ? { eventId: mtsLinkMeeting.eventId, eventSessionId: mtsLinkMeeting.eventSessionId } : null;
       return {
         ...currentConfig,
@@ -4757,10 +4792,10 @@ async function createPublicBooking(booking, config = null) {
     start: booking.start,
     end: booking.end,
     mtsLinkCreated: Boolean(mtsLinkMeeting?.meetingUrl),
-    meetingUrl: mtsLinkMeeting?.meetingUrl || null,
+    meetingUrl: meetingUrl || null,
     meetingId: mtsLinkMeeting?.meetingId || null,
     eventSessionId: mtsLinkMeeting?.eventSessionId || null,
-    provider: mtsLinkMeeting ? "mts-link" : null,
+    provider: meetingProvider,
     telegramReminderUrl: telegramReminder?.url || null,
   };
 }
