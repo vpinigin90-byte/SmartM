@@ -2778,6 +2778,16 @@ body.modal-open {
   grid-row: 5;
 }
 
+#booking-form-panel .field > .external-meeting-url-note {
+  display: block;
+  margin-top: 7px;
+  color: var(--booking-form-muted-color);
+  font-family: "Mulish", "Segoe UI", Arial, sans-serif;
+  font-size: 10px;
+  font-weight: var(--booking-form-meta-font-weight);
+  line-height: 1.35;
+}
+
 #booking-form-panel .additional-attendees-field,
 #booking-form-panel .comment-field {
   grid-column: 2;
