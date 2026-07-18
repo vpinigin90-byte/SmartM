@@ -118,13 +118,21 @@ function buildEmbedCode(version = embedCodeVersion) {
 
   <script>
     (function () {
-      var iframe = document.getElementById("scrolltool-booking-frame");
+      var script = document.currentScript;
+      var container = script && script.closest(".scrolltool-booking-embed");
+      var iframe = container
+        ? container.querySelector("#scrolltool-booking-frame")
+        : document.getElementById("scrolltool-booking-frame");
       if (!iframe) {
         return;
       }
+      var bookingOrigin = "https://meet.scroll-tool.ru";
 
       function handleResize(event) {
         if (event.source !== iframe.contentWindow) {
+          return;
+        }
+        if (event.origin !== bookingOrigin) {
           return;
         }
         if (!event.data || event.data.type !== "scrolltool-booking-resize") {
@@ -135,9 +143,24 @@ function buildEmbedCode(version = embedCodeVersion) {
           return;
         }
         iframe.style.height = Math.ceil(nextHeight) + "px";
+        window.dispatchEvent(new Event("resize"));
+      }
+
+      function requestResize() {
+        if (iframe.contentWindow) {
+          iframe.contentWindow.postMessage(
+            { type: "scrolltool-booking-request-resize" },
+            bookingOrigin
+          );
+        }
       }
 
       window.addEventListener("message", handleResize);
+      iframe.addEventListener("load", function () {
+        requestResize();
+        window.setTimeout(requestResize, 250);
+        window.setTimeout(requestResize, 1000);
+      });
       iframe.src = iframe.getAttribute("data-src");
     })();
   </script>

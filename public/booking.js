@@ -47,6 +47,8 @@ const stepIndicators = [...document.querySelectorAll("[data-step-indicator]")];
 const urlParams = new URLSearchParams(window.location.search);
 const isEmbedded = urlParams.get("embed") === "1";
 const showSuccessPreview = urlParams.get("successPreview") === "1";
+let parentHeightFrame = null;
+let lastReportedParentHeight = 0;
 
 const state = {
   slots: [],
@@ -231,13 +233,19 @@ function notifyParentHeight() {
   if (!isEmbedded || window.parent === window) {
     return;
   }
-  const height = Math.max(
-    document.body.scrollHeight,
-    document.body.offsetHeight,
-    document.documentElement.scrollHeight,
-    document.documentElement.offsetHeight,
-  );
-  window.parent.postMessage({ type: "scrolltool-booking-resize", height }, "*");
+  if (parentHeightFrame !== null) {
+    return;
+  }
+  parentHeightFrame = window.requestAnimationFrame(() => {
+    parentHeightFrame = null;
+    const shellBottom = bookingShell?.getBoundingClientRect().bottom || 0;
+    const height = Math.max(1, Math.ceil(shellBottom));
+    if (Math.abs(height - lastReportedParentHeight) < 1) {
+      return;
+    }
+    lastReportedParentHeight = height;
+    window.parent.postMessage({ type: "scrolltool-booking-resize", height }, "*");
+  });
 }
 
 function setBookingSuccessModal(open, message = "", options = {}) {
@@ -1128,10 +1136,17 @@ loadSlots().finally(() => {
 
 window.addEventListener("load", notifyParentHeight);
 window.addEventListener("resize", notifyParentHeight);
+window.addEventListener("message", (event) => {
+  if (event.data?.type === "scrolltool-booking-request-resize") {
+    lastReportedParentHeight = 0;
+    notifyParentHeight();
+  }
+});
+if (document.fonts?.ready) {
+  document.fonts.ready.then(notifyParentHeight);
+}
 if (window.ResizeObserver) {
   const parentHeightObserver = new ResizeObserver(() => notifyParentHeight());
-  parentHeightObserver.observe(document.body);
-  parentHeightObserver.observe(document.documentElement);
   if (bookingShell) {
     parentHeightObserver.observe(bookingShell);
   }
