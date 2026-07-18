@@ -22,6 +22,41 @@
     return `${start.toLocaleDateString("ru-RU")}<br><strong>${start.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} - ${end.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</strong>`;
   }
 
+  function formatCancellationAction(label, status, attempts, error) {
+    const labels = {
+      completed: "выполнено",
+      pending: "ожидает повтора",
+      failed: "ошибка",
+      not_required: "не требуется",
+    };
+    const attemptText = attempts > 1 ? `, попыток: ${attempts}` : "";
+    const errorText = error ? `<br><small title="${escapeHtml(error)}">${escapeHtml(error)}</small>` : "";
+    return `<span><strong>${label}:</strong> ${labels[status] || "неизвестно"}${attemptText}${errorText}</span>`;
+  }
+
+  function formatCancellation(meeting) {
+    if (meeting.status !== "deleted") {
+      return "-";
+    }
+    if (!meeting.cancellation) {
+      return "Дополнительные действия не требуются";
+    }
+    return [
+      formatCancellationAction(
+        "MTS Link",
+        meeting.cancellation.mtsStatus,
+        meeting.cancellation.mtsAttempts,
+        meeting.cancellation.mtsLastError,
+      ),
+      formatCancellationAction(
+        "Telegram",
+        meeting.cancellation.telegramStatus,
+        meeting.cancellation.telegramAttempts,
+        meeting.cancellation.telegramLastError,
+      ),
+    ].join("<br>");
+  }
+
   function render() {
     const active = meetings.filter((item) => item.status === "active");
     const deleted = meetings.filter((item) => item.status === "deleted");
@@ -30,7 +65,7 @@
     filters.forEach((button) => button.classList.toggle("active", button.dataset.registryFilter === filter));
     const selected = filter === "active" ? active : deleted;
     if (!selected.length) {
-      listNode.innerHTML = `<tr><td colspan="5">${filter === "active" ? "Актуальных встреч за выбранный период нет." : "Удалённых встреч за выбранный период нет."}</td></tr>`;
+      listNode.innerHTML = `<tr><td colspan="6">${filter === "active" ? "Актуальных встреч за выбранный период нет." : "Удалённых встреч за выбранный период нет."}</td></tr>`;
       return;
     }
     listNode.innerHTML = selected.map((meeting) => `
@@ -40,6 +75,7 @@
         <td>${meeting.source === "api" ? "API meet.scroll-tool.ru" : "Календарь Mail.ru"}</td>
         <td>${meeting.participation === "organizer" ? "Я назначил" : meeting.participation === "invitee" ? "Меня пригласили" : "Не определено"}</td>
         <td>${meeting.attendees?.length ? escapeHtml(meeting.attendees.join(", ")) : "-"}</td>
+        <td>${formatCancellation(meeting)}</td>
       </tr>`).join("");
   }
 

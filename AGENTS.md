@@ -18,9 +18,10 @@ The app stores configuration in `DATA_DIR` or `/data` by default and integrates 
 ## Commands
 
 - `npm start` - start the app with `node index.js`.
+- `npm test` - run the focused Node.js test suite.
 - `PORT=3000 DATA_DIR=.data npm start` - run locally with writable config stored in `.data`.
 
-There is currently no test, lint, or build script in `package.json`. If you add one, update this file and `package.json` together.
+There is currently no lint or build script in `package.json`. If you add one, update this file and `package.json` together.
 
 ## Development Guidelines
 
@@ -43,6 +44,7 @@ Before handing off changes:
 
 - Run `node --check index.js`.
 - Run `node --check public/app.js`.
+- Run `npm test`.
 - Start the app with `DATA_DIR=.data npm start` when behavior changed.
 - Manually smoke-test affected UI flows in the browser when touching `public/`.
 

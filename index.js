@@ -5,6 +5,15 @@ const path = require("path");
 const crypto = require("crypto");
 const tls = require("tls");
 const { URL } = require("url");
+const {
+  buildTelegramCancellationKeyboard,
+  buildTelegramCancellationMessage,
+  createMeetingCancellationJob,
+  getCancellationRetryAt,
+  isCancellationActionDue,
+  isCancellationJobComplete,
+  normalizeMeetingCancellationJobs,
+} = require("./meeting-cancellation");
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT) || 3000;
@@ -61,6 +70,11 @@ let configUpdateQueue = Promise.resolve();
 const PUBLIC_DEMO_DURATION_MINUTES = 60;
 const PUBLIC_DEMO_GAP_MINUTES = 30;
 const TELEGRAM_REMINDER_CHECK_MS = 60 * 1000;
+const MEETING_CANCELLATION_SYNC_MS = Math.max(
+  60 * 1000,
+  Number(process.env.MEETING_CANCELLATION_SYNC_MS) || 2 * 60 * 1000,
+);
+const MEETING_CANCELLATION_QUEUE_MS = 60 * 1000;
 const TELEGRAM_REMINDER_OFFSETS = [
   { key: "3d", label: "за 3 дня", ms: 3 * 24 * 60 * 60 * 1000 },
   { key: "1d", label: "за 1 день", ms: 24 * 60 * 60 * 1000 },
@@ -870,6 +884,8 @@ function normalizeMeetingRegistry(source = []) {
       start: String(entry?.start || "").trim(),
       end: String(entry?.end || "").trim(),
       source: entry?.source === "api" ? "api" : "calendar",
+      employeeId: String(entry?.employeeId || "").trim() || null,
+      employeeEmail: normalizeEmailAddress(entry?.employeeEmail || ""),
       participation: ["organizer", "invitee", "unknown"].includes(entry?.participation) ? entry.participation : "unknown",
       attendees: Array.isArray(entry?.attendees) ? entry.attendees.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 30) : [],
       status: entry?.status === "deleted" ? "deleted" : "active",
@@ -961,6 +977,7 @@ function normalizeConfig(config = {}) {
     meetingFiles: normalizeMeetingFiles(config.meetingFiles),
     meetingRegistry: normalizeMeetingRegistry(config.meetingRegistry),
     telegramReminders: normalizeTelegramReminderRecords(config.telegramReminders),
+    meetingCancellationJobs: normalizeMeetingCancellationJobs(config.meetingCancellationJobs),
   };
 }
 
@@ -1820,7 +1837,7 @@ function sanitizeTelegramForAdmin(settings = {}) {
 
 function sanitizeConfigForAdmin(config) {
   const normalized = normalizeConfig(config);
-  const { telegramReminders, ...safeConfig } = normalized;
+  const { telegramReminders, meetingCancellationJobs, ...safeConfig } = normalized;
   return {
     ...safeConfig,
     employees: normalized.employees.map(sanitizeEmployeeForAdmin),
@@ -2992,16 +3009,28 @@ function buildMtsLinkFormPayload(data) {
   return params;
 }
 
-function createMtsLinkError(message, responseText = "", statusCode = 502) {
+function createMtsLinkError(message, responseText = "", statusCode = 502, upstreamStatus = 0, retryAfterMs = 0) {
   const error = new Error(message);
   error.statusCode = statusCode;
   error.responseText = responseText;
+  error.upstreamStatus = Number(upstreamStatus) || 0;
+  error.retryAfterMs = Math.max(0, Number(retryAfterMs) || 0);
   return error;
 }
 
 function withMtsLinkStep(error, step) {
   error.mtsLinkStep = step;
   return error;
+}
+
+function parseRetryAfterMs(value) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return 0;
+  if (/^\d+$/.test(rawValue)) {
+    return Number(rawValue) * 1000;
+  }
+  const retryAt = Date.parse(rawValue);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : 0;
 }
 
 async function mtsLinkRequest(settings, endpointPath, options = {}) {
@@ -3040,6 +3069,8 @@ async function mtsLinkRequest(settings, endpointPath, options = {}) {
         `MTS Link ответил со статусом ${response.status}.`,
         responseText,
         response.status === 400 || response.status === 401 || response.status === 403 ? 400 : 502,
+        response.status,
+        parseRetryAfterMs(response.headers.get("retry-after")),
       );
     }
 
@@ -3051,6 +3082,27 @@ async function mtsLinkRequest(settings, endpointPath, options = {}) {
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function deleteMtsLinkMeeting(settings, eventSessionId) {
+  const normalizedEventSessionId = String(eventSessionId || "").trim();
+  if (!/^\d+$/.test(normalizedEventSessionId)) {
+    throw createMtsLinkError("Некорректный eventSessionId для удаления MTS Link.", "", 400);
+  }
+  if (!settings?.accessToken) {
+    throw createMtsLinkError("Не настроен токен доступа MTS Link.", "", 502);
+  }
+  try {
+    return await mtsLinkRequest(settings, `/eventsessions/${normalizedEventSessionId}`, {
+      method: "DELETE",
+      form: { sendEmail: "false" },
+    });
+  } catch (error) {
+    if (error.upstreamStatus === 404) {
+      return { status: 404, alreadyDeleted: true };
+    }
+    throw withMtsLinkStep(error, "delete");
   }
 }
 
@@ -3390,12 +3442,13 @@ async function fetchCalendarEvents(email, password, calendar, rangeStartIso, ran
   return events;
 }
 
-async function fetchEventsAcrossCalendars(email, password, rangeStartIso, rangeEndIso) {
+async function fetchEventsAcrossCalendars(email, password, rangeStartIso, rangeEndIso, options = {}) {
   const calendars = await getCalendarsForUser(email, password);
   const perCalendarEvents = await Promise.all(
-    calendars.map((calendar) =>
-      fetchCalendarEvents(email, password, calendar, rangeStartIso, rangeEndIso).catch(() => []),
-    ),
+    calendars.map((calendar) => {
+      const request = fetchCalendarEvents(email, password, calendar, rangeStartIso, rangeEndIso);
+      return options.strict ? request : request.catch(() => []);
+    }),
   );
 
   return {
@@ -3961,14 +4014,34 @@ function getRegistryEntryId(event) {
   return crypto.createHash("sha256").update(`${event.calendarUrl || ""}|${event.eventUrl || ""}|${event.uid || ""}|${event.start}`).digest("base64url");
 }
 
-function mapCalendarEventToRegistry(event, employeeEmail, previousEntry = null) {
-  const email = String(employeeEmail || "").toLowerCase();
+function findPreviousRegistryEntry(event, employee, registry) {
+  const employeeId = String(employee?.id || "");
+  const candidates = registry.filter((entry) => {
+    if (entry.employeeId && employeeId && entry.employeeId !== employeeId) {
+      return false;
+    }
+    if (event.eventUrl && entry.eventUrl === event.eventUrl) {
+      return true;
+    }
+    return Boolean(
+      event.uid
+      && entry.uid === event.uid
+      && (!event.calendarUrl || !entry.calendarUrl || entry.calendarUrl === event.calendarUrl),
+    );
+  });
+  return candidates.find((entry) => entry.start === event.start)
+    || candidates.find((entry) => entry.source === "api")
+    || null;
+}
+
+function mapCalendarEventToRegistry(event, employee, previousEntry = null) {
+  const email = String(employee?.email || employee || "").toLowerCase();
   const organizer = String(event.organizer || "").toLowerCase();
   const attendees = Array.isArray(event.attendees) ? event.attendees : [];
   const participation = organizer === email ? "organizer" : attendees.some((item) => String(item).toLowerCase() === email) ? "invitee" : "unknown";
   const source = previousEntry?.source === "api" || String(event.description || "").includes("Заявка на демо:") ? "api" : "calendar";
   return {
-    id: getRegistryEntryId(event),
+    id: previousEntry?.id || getRegistryEntryId(event),
     eventUrl: event.eventUrl || null,
     calendarUrl: event.calendarUrl || null,
     uid: event.uid || null,
@@ -3976,6 +4049,8 @@ function mapCalendarEventToRegistry(event, employeeEmail, previousEntry = null) 
     start: event.start,
     end: event.end,
     source,
+    employeeId: String(employee?.id || previousEntry?.employeeId || "").trim() || null,
+    employeeEmail: email || previousEntry?.employeeEmail || "",
     participation,
     attendees,
     status: "active",
@@ -3985,36 +4060,176 @@ function mapCalendarEventToRegistry(event, employeeEmail, previousEntry = null) 
   };
 }
 
+function addMeetingCancellationJobs(config, meetings, source, now) {
+  let meetingCancellationJobs = [...(config.meetingCancellationJobs || [])];
+  const reminderByMeeting = new Map();
+
+  for (const reminder of config.telegramReminders || []) {
+    const meeting = meetings.find((entry) => (
+      (entry.uid && reminder.uid === entry.uid)
+      || (entry.eventUrl && reminder.eventUrl === entry.eventUrl)
+    ));
+    if (meeting) {
+      reminderByMeeting.set(meeting.id, reminder);
+    }
+  }
+
+  for (const meeting of meetings) {
+    if (
+      new Date(meeting.end).getTime() <= Date.parse(now)
+      || meetingCancellationJobs.some((job) => job.meetingRegistryId === meeting.id)
+    ) {
+      continue;
+    }
+    const job = createMeetingCancellationJob({
+      id: crypto.randomUUID(),
+      meeting,
+      reminder: reminderByMeeting.get(meeting.id),
+      source,
+      now,
+    });
+    if (job) {
+      meetingCancellationJobs.push(job);
+    }
+  }
+
+  const telegramReminders = (config.telegramReminders || []).map((reminder) => {
+    const matchesCancelledMeeting = meetings.some((meeting) => (
+      (meeting.uid && reminder.uid === meeting.uid)
+      || (meeting.eventUrl && reminder.eventUrl === meeting.eventUrl)
+    ));
+    if (!matchesCancelledMeeting) {
+      return reminder;
+    }
+    return {
+      ...reminder,
+      status: "cancelled",
+      reminders: reminder.reminders.map((item) => ({
+        ...item,
+        skippedAt: item.skippedAt || now,
+      })),
+    };
+  });
+
+  return {
+    ...config,
+    telegramReminders,
+    meetingCancellationJobs: normalizeMeetingCancellationJobs(meetingCancellationJobs),
+  };
+}
+
+function getRegistrySyncEmployees(config) {
+  const activeEmployee = getActiveEmployee(config);
+  const requiredEmployeeIds = new Set(
+    (config.meetingRegistry || [])
+      .filter((entry) => entry.status === "active" && entry.source === "api" && entry.employeeId)
+      .map((entry) => entry.employeeId),
+  );
+  if (activeEmployee?.id) {
+    requiredEmployeeIds.add(activeEmployee.id);
+  }
+  return config.employees.filter((employee) => (
+    employee.email
+    && employee.password
+    && (requiredEmployeeIds.size === 0 || requiredEmployeeIds.has(employee.id))
+  ));
+}
+
 async function syncMeetingRegistry(config) {
-  const employee = getActiveEmployee(config);
-  if (!employee?.email || !employee?.password) {
+  const employees = getRegistrySyncEmployees(config);
+  if (!employees.length) {
     return { config, registry: config.meetingRegistry || [], syncError: "Не выбран сотрудник с подключённым календарём." };
   }
   const rangeStart = new Date();
   rangeStart.setDate(rangeStart.getDate() - 30);
   const rangeEnd = new Date();
   rangeEnd.setDate(rangeEnd.getDate() + 90);
-  let result;
+  let employeeResults;
   try {
-    result = await fetchEventsAcrossCalendars(employee.email, employee.password, rangeStart.toISOString(), rangeEnd.toISOString());
+    employeeResults = await Promise.all(employees.map(async (employee) => ({
+      employee,
+      result: await fetchEventsAcrossCalendars(
+        employee.email,
+        employee.password,
+        rangeStart.toISOString(),
+        rangeEnd.toISOString(),
+        { strict: true },
+      ),
+    })));
   } catch {
     return { config, registry: config.meetingRegistry || [], syncError: "Не удалось обновить данные из календаря Mail.ru." };
   }
-  const previousById = new Map((config.meetingRegistry || []).map((entry) => [entry.id, entry]));
-  const seenIds = new Set();
-  const activeEntries = result.events.map((event) => {
-    const id = getRegistryEntryId(event);
-    seenIds.add(id);
-    return mapCalendarEventToRegistry(event, employee.email, previousById.get(id));
+  let syncedConfig;
+  const now = new Date().toISOString();
+  const scannedEmployeeIds = new Set(employees.map((employee) => employee.id));
+  const fallbackEmployeeId = getActiveEmployee(config)?.id || employees[0]?.id || null;
+
+  syncedConfig = await updateConfig((currentConfig) => {
+    const previousRegistry = currentConfig.meetingRegistry || [];
+    const seenIds = new Set();
+    const activeEntries = employeeResults.flatMap(({ employee, result }) => (
+      result.events.map((event) => {
+        const previousEntry = findPreviousRegistryEntry(event, employee, previousRegistry);
+        const entry = mapCalendarEventToRegistry(event, employee, previousEntry);
+        seenIds.add(entry.id);
+        return entry;
+      })
+    ));
+    const newlyDeletedEntries = [];
+    const retainedEntries = [];
+    const deletedEntries = [];
+    for (const entry of previousRegistry) {
+      if (seenIds.has(entry.id)) {
+        continue;
+      }
+      const employeeWasScanned = entry.employeeId
+        ? scannedEmployeeIds.has(entry.employeeId)
+        : scannedEmployeeIds.has(fallbackEmployeeId);
+      const inRange = new Date(entry.start) >= rangeStart && new Date(entry.start) <= rangeEnd;
+      if (entry.status === "active" && employeeWasScanned && inRange) {
+        newlyDeletedEntries.push(entry);
+        deletedEntries.push({
+          ...entry,
+          status: "deleted",
+          deletedAt: entry.deletedAt || now,
+        });
+      } else if (entry.status === "deleted") {
+        deletedEntries.push(entry);
+      } else {
+        retainedEntries.push(entry);
+      }
+    }
+    const registry = [...activeEntries, ...retainedEntries, ...deletedEntries]
+      .sort((left, right) => new Date(right.start) - new Date(left.start))
+      .slice(0, 500);
+    const withRegistry = { ...currentConfig, meetingRegistry: registry };
+    return addMeetingCancellationJobs(withRegistry, newlyDeletedEntries, "calendar_sync", now);
   });
-  const deletedEntries = (config.meetingRegistry || []).filter((entry) => {
-    const inRange = new Date(entry.start) >= rangeStart && new Date(entry.start) <= rangeEnd;
-    return entry.status === "deleted" || (inRange && !seenIds.has(entry.id));
-  }).map((entry) => ({ ...entry, status: "deleted", deletedAt: entry.deletedAt || new Date().toISOString() }));
-  const registry = [...activeEntries, ...deletedEntries].sort((left, right) => new Date(right.start) - new Date(left.start)).slice(0, 500);
-  const nextConfig = { ...config, meetingRegistry: registry };
-  await saveConfig(nextConfig);
-  return { config: nextConfig, registry, syncError: null };
+
+  return { config: syncedConfig, registry: syncedConfig.meetingRegistry, syncError: null };
+}
+
+async function registerMeetingCancellationByEventUrl(eventUrl, source = "admin") {
+  const now = new Date().toISOString();
+  return updateConfig((currentConfig) => {
+    const meeting = currentConfig.meetingRegistry.find((entry) => (
+      entry.status === "active" && entry.eventUrl === eventUrl
+    ));
+    if (!meeting) {
+      return currentConfig;
+    }
+    const meetingRegistry = currentConfig.meetingRegistry.map((entry) => (
+      entry.id === meeting.id
+        ? { ...entry, status: "deleted", deletedAt: entry.deletedAt || now }
+        : entry
+    ));
+    return addMeetingCancellationJobs(
+      { ...currentConfig, meetingRegistry },
+      [meeting],
+      source,
+      now,
+    );
+  });
 }
 
 function createTelegramReminderToken() {
@@ -4233,6 +4448,167 @@ async function sendTelegramMessage(settings, chatId, text, options = {}) {
   });
 }
 
+let meetingCancellationQueueRunning = false;
+let meetingCancellationSyncRunning = false;
+
+function shouldRetryCancellationError(error) {
+  const status = Number(error?.upstreamStatus || error?.statusCode) || 0;
+  return status === 0 || status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function getCancellationErrorMessage(error, fallback) {
+  return String(error?.message || fallback).trim().slice(0, 500);
+}
+
+async function updateMeetingCancellationJob(jobId, updater) {
+  const nextConfig = await updateConfig((currentConfig) => ({
+    ...currentConfig,
+    meetingCancellationJobs: normalizeMeetingCancellationJobs(
+      currentConfig.meetingCancellationJobs.map((job) => {
+        if (job.id !== jobId) {
+          return job;
+        }
+        const updatedJob = updater(job);
+        return {
+          ...updatedJob,
+          completedAt: isCancellationJobComplete(updatedJob)
+            ? updatedJob.completedAt || new Date().toISOString()
+            : null,
+        };
+      }),
+    ),
+  }));
+  return nextConfig.meetingCancellationJobs.find((job) => job.id === jobId) || null;
+}
+
+async function processMeetingCancellationQueue() {
+  if (meetingCancellationQueueRunning) {
+    return;
+  }
+  meetingCancellationQueueRunning = true;
+  try {
+    const config = await loadConfig();
+    const nowMs = Date.now();
+    for (const snapshot of config.meetingCancellationJobs || []) {
+      let job = snapshot;
+      if (isCancellationActionDue(job.mtsStatus, job.mtsNextAttemptAt, nowMs)) {
+        try {
+          await deleteMtsLinkMeeting(config.mtsLink, job.eventSessionId);
+          job = await updateMeetingCancellationJob(job.id, (currentJob) => ({
+            ...currentJob,
+            mtsStatus: "completed",
+            mtsAttempts: currentJob.mtsAttempts + 1,
+            mtsNextAttemptAt: null,
+            mtsDeletedAt: new Date().toISOString(),
+            mtsLastError: "",
+          })) || job;
+        } catch (error) {
+          const retryable = shouldRetryCancellationError(error);
+          job = await updateMeetingCancellationJob(job.id, (currentJob) => {
+            const attempts = currentJob.mtsAttempts + 1;
+            return {
+              ...currentJob,
+              mtsStatus: retryable ? "pending" : "failed",
+              mtsAttempts: attempts,
+              mtsNextAttemptAt: retryable
+                ? getCancellationRetryAt(attempts, Date.now(), error?.retryAfterMs)
+                : null,
+              mtsLastError: getCancellationErrorMessage(error, "Не удалось удалить встречу MTS Link."),
+            };
+          }) || job;
+        }
+      }
+
+      if (isCancellationActionDue(job.telegramStatus, job.telegramNextAttemptAt, nowMs)) {
+        try {
+          if (!config.telegram?.enabled) {
+            throw createHttpError("Telegram-бот отключён в настройках.", 502);
+          }
+          await sendTelegramMessage(
+            config.telegram,
+            job.clientChatId,
+            buildTelegramCancellationMessage(job),
+            { reply_markup: buildTelegramCancellationKeyboard() },
+          );
+          await updateMeetingCancellationJob(job.id, (currentJob) => ({
+            ...currentJob,
+            telegramStatus: "completed",
+            telegramAttempts: currentJob.telegramAttempts + 1,
+            telegramNextAttemptAt: null,
+            telegramSentAt: new Date().toISOString(),
+            telegramLastError: "",
+          }));
+        } catch (error) {
+          const retryable = shouldRetryCancellationError(error);
+          await updateMeetingCancellationJob(job.id, (currentJob) => {
+            const attempts = currentJob.telegramAttempts + 1;
+            return {
+              ...currentJob,
+              telegramStatus: retryable ? "pending" : "failed",
+              telegramAttempts: attempts,
+              telegramNextAttemptAt: retryable
+                ? getCancellationRetryAt(attempts, Date.now())
+                : null,
+              telegramLastError: getCancellationErrorMessage(error, "Не удалось отправить уведомление об отмене."),
+            };
+          });
+        }
+      }
+    }
+  } finally {
+    meetingCancellationQueueRunning = false;
+  }
+}
+
+async function runMeetingCancellationSync() {
+  if (meetingCancellationSyncRunning) {
+    return;
+  }
+  meetingCancellationSyncRunning = true;
+  try {
+    const config = await loadConfig();
+    const hasFutureApiMeetings = config.meetingRegistry.some((entry) => (
+      entry.source === "api"
+      && entry.status === "active"
+      && new Date(entry.end).getTime() > Date.now()
+    ));
+    if (hasFutureApiMeetings) {
+      const result = await syncMeetingRegistry(config);
+      if (result.syncError) {
+        console.warn("[Meeting cancellation] calendar sync skipped:", result.syncError);
+      }
+    }
+    await processMeetingCancellationQueue();
+  } finally {
+    meetingCancellationSyncRunning = false;
+  }
+}
+
+function getMeetingRegistryForAdmin(config) {
+  const jobsByMeetingId = new Map(
+    (config.meetingCancellationJobs || []).map((job) => [job.meetingRegistryId, job]),
+  );
+  return (config.meetingRegistry || []).map((meeting) => {
+    const job = jobsByMeetingId.get(meeting.id);
+    if (!job) {
+      return { ...meeting, cancellation: null };
+    }
+    return {
+      ...meeting,
+      cancellation: {
+        detectedAt: job.detectedAt,
+        completedAt: job.completedAt,
+        mtsStatus: job.mtsStatus,
+        mtsAttempts: job.mtsAttempts,
+        mtsLastError: job.mtsLastError,
+        telegramStatus: job.telegramStatus,
+        telegramAttempts: job.telegramAttempts,
+        telegramLastError: job.telegramLastError,
+      },
+    };
+  });
+}
+
 async function createPublicBooking(booking, config = null) {
   const currentConfig = config || await loadConfig();
   const target = await findEmployeeForBooking(booking.start, booking.end, booking.rules, currentConfig);
@@ -4358,7 +4734,7 @@ async function createPublicBooking(booking, config = null) {
   }, currentConfig.telegram);
   try {
     await updateConfig((currentConfig) => {
-      const entry = mapCalendarEventToRegistry(registryEvent, target.employee.email);
+      const entry = mapCalendarEventToRegistry(registryEvent, target.employee);
       entry.source = "api";
       entry.mtsLink = mtsLinkMeeting ? { eventId: mtsLinkMeeting.eventId, eventSessionId: mtsLinkMeeting.eventSessionId } : null;
       return {
@@ -5185,7 +5561,13 @@ async function handleApi(request, requestUrl, response) {
   if (request.method === "GET" && requestUrl.pathname === "/api/meeting-registry") {
     const config = await loadConfig();
     const result = await syncMeetingRegistry(config);
-    return json(response, 200, { meetings: result.registry, syncError: result.syncError, periodDays: { past: 30, future: 90 } });
+    await processMeetingCancellationQueue();
+    const latestConfig = await loadConfig();
+    return json(response, 200, {
+      meetings: getMeetingRegistryForAdmin(latestConfig),
+      syncError: result.syncError,
+      periodDays: { past: 30, future: 90 },
+    });
   }
 
   if (request.method === "GET" && requestUrl.pathname === "/api/meeting-files") {
@@ -5622,7 +6004,15 @@ async function handleApi(request, requestUrl, response) {
       assertEventUrlBelongsToCalendars(eventUrl, calendars, { requireWritable: true });
 
       const result = await deleteCalendarObject(email, password, eventUrl, etag);
-      return json(response, 200, result);
+      let cancellationQueued = false;
+      try {
+        const nextConfig = await registerMeetingCancellationByEventUrl(eventUrl, "admin");
+        cancellationQueued = nextConfig.meetingCancellationJobs.some((job) => job.eventUrl === eventUrl);
+        await processMeetingCancellationQueue();
+      } catch (error) {
+        console.warn("[Meeting cancellation] direct deletion follow-up failed:", error.message);
+      }
+      return json(response, 200, { ...result, cancellationQueued });
     } catch (error) {
       return handleCalDavError(response, error, "Не удалось удалить событие.");
     }
@@ -5755,3 +6145,21 @@ setTimeout(() => {
     console.warn("[Telegram] initial reminder queue failed:", error.message);
   });
 }, 5000);
+
+setInterval(() => {
+  runMeetingCancellationSync().catch((error) => {
+    console.warn("[Meeting cancellation] sync failed:", error.message);
+  });
+}, MEETING_CANCELLATION_SYNC_MS);
+
+setTimeout(() => {
+  runMeetingCancellationSync().catch((error) => {
+    console.warn("[Meeting cancellation] initial sync failed:", error.message);
+  });
+}, 10000);
+
+setInterval(() => {
+  processMeetingCancellationQueue().catch((error) => {
+    console.warn("[Meeting cancellation] queue failed:", error.message);
+  });
+}, MEETING_CANCELLATION_QUEUE_MS);

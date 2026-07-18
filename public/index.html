@@ -426,7 +426,7 @@
             <div class="results-head">
               <div>
                 <h2>Реестр встреч</h2>
-                <p class="summary full-width-summary">Данные из календаря за 30 дней назад и 90 дней вперёд. Удалённые события обновляются при открытии реестра.</p>
+                <p class="summary full-width-summary">Данные из календаря за 30 дней назад и 90 дней вперёд. Удаление будущих API-встреч проверяется автоматически каждые две минуты.</p>
               </div>
               <button id="refresh-meeting-registry-button" class="secondary-button" type="button">Обновить</button>
             </div>
@@ -437,8 +437,8 @@
             </div>
             <div class="meeting-files-table-wrap">
               <table class="meeting-files-table registry-table">
-                <thead><tr><th>Дата и время</th><th>Встреча</th><th>Источник</th><th>Роль</th><th>Участники</th></tr></thead>
-                <tbody id="meeting-registry-list"><tr><td colspan="5">Откройте реестр, чтобы загрузить встречи.</td></tr></tbody>
+                <thead><tr><th>Дата и время</th><th>Встреча</th><th>Источник</th><th>Роль</th><th>Участники</th><th>Обработка удаления</th></tr></thead>
+                <tbody id="meeting-registry-list"><tr><td colspan="6">Откройте реестр, чтобы загрузить встречи.</td></tr></tbody>
               </table>
             </div>
           </section>
