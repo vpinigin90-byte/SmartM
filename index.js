@@ -4139,9 +4139,29 @@ function buildTelegramClientReminderKeyboard(record, offset) {
   return { inline_keyboard: rows };
 }
 
+function formatUpcomingTelegramReminders(record, nowMs = Date.now()) {
+  const remindersByKey = new Map(
+    (record.reminders || []).map((reminder) => [reminder.key, reminder]),
+  );
+  const labels = TELEGRAM_REMINDER_OFFSETS
+    .filter((offset) => {
+      const reminder = remindersByKey.get(offset.key);
+      return reminder
+        && !reminder.skippedAt
+        && Date.parse(reminder.dueAt) > nowMs;
+    })
+    .map((offset) => offset.label);
+
+  if (labels.length < 2) {
+    return labels[0] || "";
+  }
+  return `${labels.slice(0, -1).join(", ")} и ${labels.at(-1)}`;
+}
+
 function buildTelegramClientConfirmation(record) {
   const details = formatTelegramMeetingDetails(record);
-  return [
+  const upcomingReminders = formatUpcomingTelegramReminders(record);
+  const lines = [
     "Встреча назначена!",
     "",
     `Здравствуйте, ${record.clientName || "участник"}. Ваша встреча с Scrolltool подтверждена.`,
@@ -4150,9 +4170,11 @@ function buildTelegramClientConfirmation(record) {
     `Время: ${details.startTime}–${details.endTime} (Москва)`,
     `Встречу проведёт: ${TELEGRAM_MEETING_HOST}`,
     "Формат: онлайн",
-    "",
-    "Я напомню о встрече за 3 дня, за 1 день и за 1 час до начала.",
-  ].join("\n");
+  ];
+  if (upcomingReminders) {
+    lines.push("", `Я напомню о встрече ${upcomingReminders} до начала.`);
+  }
+  return lines.join("\n");
 }
 
 function buildTelegramClientReminder(record, offset) {
