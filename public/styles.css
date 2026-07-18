@@ -3841,14 +3841,24 @@ body.modal-open {
 
 /* Hallmark · login page · genre: modern-minimal · theme: existing SmartM dark */
 .admin-shell:has(> .admin-login-card:not(.hidden-panel)) {
-  padding-bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding: 16px 28px;
 }
 
 .admin-shell .admin-login-card {
-  width: min(1060px, 100%);
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  width: min(920px, 100%);
   max-width: none;
-  min-height: min(760px, calc(100vh - 32px));
-  margin-top: 0;
+  min-height: min(650px, calc(100vh - 32px));
+  min-height: min(650px, calc(100dvh - 32px));
+  margin: 0 auto;
   padding: 0;
   overflow: hidden;
   border-radius: 18px;
@@ -3858,17 +3868,17 @@ body.modal-open {
 .admin-login-brand {
   display: flex;
   align-items: center;
-  min-height: 150px;
-  padding: 32px 50px;
+  min-height: 110px;
+  padding: 24px 40px;
   border-bottom: 1px solid var(--border);
   background: var(--secondary);
 }
 
 .admin-login-brand img {
   display: block;
-  width: min(184px, 48vw);
+  width: min(164px, 48vw);
   height: auto;
-  max-height: 52px;
+  max-height: 46px;
   object-fit: contain;
   object-position: left center;
 }
@@ -3877,9 +3887,9 @@ body.modal-open {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 30px;
-  min-height: 520px;
-  padding: 56px 32px 64px;
+  gap: 22px;
+  min-height: 0;
+  padding: 36px 32px 40px;
 }
 
 .admin-login-copy {
@@ -3890,7 +3900,7 @@ body.modal-open {
 }
 
 .admin-shell .admin-login-copy h1 {
-  font-size: clamp(30px, 4vw, 42px);
+  font-size: clamp(30px, 4vw, 36px);
   line-height: 1.1;
 }
 
@@ -3902,26 +3912,26 @@ body.modal-open {
 
 .admin-shell .admin-login-form,
 .admin-shell .admin-login-content > .status {
-  width: min(480px, 100%);
+  width: min(420px, 100%);
 }
 
 .admin-shell .admin-login-form {
-  gap: 18px;
+  gap: 14px;
 }
 
 .admin-shell .admin-login-form .field {
-  gap: 8px;
+  gap: 6px;
 }
 
 .admin-shell .admin-login-form input {
-  min-height: 58px;
+  min-height: 52px;
   border-radius: 8px;
-  padding: 15px 18px;
+  padding: 12px 16px;
 }
 
 .admin-shell .admin-login-form .primary-button {
-  min-height: 50px;
-  margin-top: 8px;
+  min-height: 46px;
+  margin-top: 4px;
   border-radius: 8px;
   background: var(--primary);
   color: var(--primary-foreground);
@@ -3944,25 +3954,28 @@ body.modal-open {
 }
 
 @media (max-width: 720px) {
+  .admin-shell:has(> .admin-login-card:not(.hidden-panel)) {
+    padding: 14px;
+  }
+
   .admin-shell .admin-login-card {
     min-height: calc(100vh - 28px);
+    min-height: calc(100dvh - 28px);
   }
 
   .admin-login-brand {
-    min-height: 112px;
-    padding: 24px;
+    min-height: 84px;
+    padding: 18px 22px;
   }
 
   .admin-login-brand img {
-    width: min(154px, 52vw);
-    max-height: 44px;
+    width: min(142px, 52vw);
+    max-height: 40px;
   }
 
   .admin-login-content {
-    align-content: start;
-    gap: 26px;
-    min-height: 0;
-    padding: 44px 20px;
+    gap: 20px;
+    padding: 28px 20px 32px;
   }
 
   .admin-shell .admin-login-copy h1 {
@@ -3972,5 +3985,40 @@ body.modal-open {
   .admin-shell .admin-login-copy .summary {
     max-width: 30ch;
     font-size: 14px;
+  }
+}
+
+@media (max-height: 620px) and (min-width: 721px) {
+  .admin-shell .admin-login-card {
+    min-height: calc(100vh - 32px);
+    min-height: calc(100dvh - 32px);
+  }
+
+  .admin-login-brand {
+    min-height: 82px;
+    padding: 16px 32px;
+  }
+
+  .admin-login-brand img {
+    width: 146px;
+    max-height: 40px;
+  }
+
+  .admin-login-content {
+    gap: 16px;
+    padding: 22px 32px 26px;
+  }
+
+  .admin-shell .admin-login-form {
+    gap: 10px;
+  }
+
+  .admin-shell .admin-login-form input {
+    min-height: 46px;
+    padding-block: 10px;
+  }
+
+  .admin-shell .admin-login-form .primary-button {
+    min-height: 42px;
   }
 }
