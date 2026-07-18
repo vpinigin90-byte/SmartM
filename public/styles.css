@@ -2725,16 +2725,7 @@ body.modal-open {
   gap: 8px;
 }
 
-#booking-form-panel .field > .external-meeting-url-note {
-  display: block;
-  margin-top: 7px;
-  color: var(--booking-form-muted-color);
-  font-family: "Mulish", "Segoe UI", Arial, sans-serif;
-  font-size: 10px;
-  font-weight: var(--booking-form-meta-font-weight);
-  line-height: 1.35;
-}
-
+#booking-form-panel .external-meeting-url-field,
 #booking-form-panel .additional-attendees-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px;
@@ -2753,11 +2744,14 @@ body.modal-open {
   margin: 0;
 }
 
+#booking-form-panel .external-meeting-url-field input,
+#booking-form-panel .external-meeting-url-field > small,
 #booking-form-panel .additional-attendees-field input,
 #booking-form-panel .additional-attendees-field > small {
   grid-column: 1;
 }
 
+#booking-form-panel .external-meeting-url-field .field-info-tooltip,
 #booking-form-panel .additional-attendees-field .field-info-tooltip {
   grid-column: 2;
   grid-row: 1;
@@ -2768,21 +2762,27 @@ body.modal-open {
   font-size: 15px;
 }
 
+#booking-form-panel .external-meeting-url-field .field-info-tooltip::after,
 #booking-form-panel .additional-attendees-field .field-info-tooltip::after {
   right: 0;
   transform: translate(0, 4px);
 }
 
+#booking-form-panel .external-meeting-url-field .field-info-tooltip::before,
 #booking-form-panel .additional-attendees-field .field-info-tooltip::before {
   right: 7px;
   transform: translate(0, 4px) rotate(45deg);
 }
 
+#booking-form-panel .external-meeting-url-field .field-info-tooltip:hover::after,
+#booking-form-panel .external-meeting-url-field .field-info-tooltip:focus-visible::after,
 #booking-form-panel .additional-attendees-field .field-info-tooltip:hover::after,
 #booking-form-panel .additional-attendees-field .field-info-tooltip:focus-visible::after {
   transform: translate(0, 0);
 }
 
+#booking-form-panel .external-meeting-url-field .field-info-tooltip:hover::before,
+#booking-form-panel .external-meeting-url-field .field-info-tooltip:focus-visible::before,
 #booking-form-panel .additional-attendees-field .field-info-tooltip:hover::before,
 #booking-form-panel .additional-attendees-field .field-info-tooltip:focus-visible::before {
   transform: translate(0, 0) rotate(45deg);
