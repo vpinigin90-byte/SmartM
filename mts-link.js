@@ -59,7 +59,28 @@ function buildMtsLinkEventDeliverySettings(iso, timeZone) {
   };
 }
 
+function buildMtsLinkEventAccessSettings() {
+  return {
+    "accessSettings[isPasswordRequired]": "0",
+    "accessSettings[isModerationRequired]": "0",
+    "accessSettings[isRegistrationRequired]": "0",
+  };
+}
+
+function getMtsLinkMeetingUrl(sessionPayload = {}, eventPayload = {}) {
+  const candidates = [
+    sessionPayload.link,
+    sessionPayload.url,
+    sessionPayload.joinLink,
+    sessionPayload.guestLink,
+    eventPayload.link,
+  ];
+  return candidates.map((value) => String(value || "").trim()).find(Boolean) || "";
+}
+
 module.exports = {
+  buildMtsLinkEventAccessSettings,
   buildMtsLinkEventDeliverySettings,
   formatMtsLinkDateTime,
+  getMtsLinkMeetingUrl,
 };

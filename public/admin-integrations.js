@@ -151,10 +151,8 @@
       <p><strong>Создано:</strong> ${escapeHtml(new Date(lastSuccessMeeting.createdAt).toLocaleString("ru-RU"))}</p>
       <p><strong>Event ID:</strong> ${escapeHtml(lastSuccessMeeting.eventId || "—")}</p>
       <p><strong>EventSession ID:</strong> ${escapeHtml(lastSuccessMeeting.eventSessionId || "—")}</p>
-      <p><strong>Registrant ID:</strong> ${escapeHtml(lastSuccessMeeting.registrantId || "—")}</p>
-      <p><strong>Ссылка:</strong> ${lastSuccessMeeting.meetingUrl ? `<a href="${escapeHtml(lastSuccessMeeting.meetingUrl)}" target="_blank" rel="noreferrer">${escapeHtml(lastSuccessMeeting.meetingUrl)}</a>` : "—"}</p>
+      <p><strong>Общая ссылка встречи:</strong> ${lastSuccessMeeting.meetingUrl ? `<a href="${escapeHtml(lastSuccessMeeting.meetingUrl)}" target="_blank" rel="noreferrer">${escapeHtml(lastSuccessMeeting.meetingUrl)}</a>` : "—"}</p>
       <p><strong>Сессия встречи создана:</strong> ${lastSuccessMeeting.rawStatus === 201 ? "да" : "проверьте статус"}</p>
-      <p><strong>Ссылка участника создана:</strong> ${lastSuccessMeeting.registerStatus === 201 ? "да" : "проверьте статус"}</p>
     `;
   }
 

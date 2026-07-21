@@ -2,8 +2,10 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  buildMtsLinkEventAccessSettings,
   buildMtsLinkEventDeliverySettings,
   formatMtsLinkDateTime,
+  getMtsLinkMeetingUrl,
 } = require("../mts-link");
 
 test("formats MTS Link timestamps with the configured time-zone offset", () => {
@@ -26,6 +28,24 @@ test("disables MTS Link standard reminders for calendar-managed bookings", () =>
       lang: "RU",
       defaultRemindersEnabled: "false",
     },
+  );
+});
+
+test("creates MTS Link meetings with free access", () => {
+  assert.deepEqual(buildMtsLinkEventAccessSettings(), {
+    "accessSettings[isPasswordRequired]": "0",
+    "accessSettings[isModerationRequired]": "0",
+    "accessSettings[isRegistrationRequired]": "0",
+  });
+});
+
+test("uses the common EventSession link without participant registration", () => {
+  assert.equal(
+    getMtsLinkMeetingUrl(
+      { link: "https://my.mts-link.ru/common-session" },
+      { link: "https://my.mts-link.ru/event-landing" },
+    ),
+    "https://my.mts-link.ru/common-session",
   );
 });
 

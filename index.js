@@ -19,8 +19,10 @@ const {
   shouldCreateMtsLink,
 } = require("./meeting-link");
 const {
+  buildMtsLinkEventAccessSettings,
   buildMtsLinkEventDeliverySettings,
   formatMtsLinkDateTime,
+  getMtsLinkMeetingUrl,
 } = require("./mts-link");
 
 const HOST = "0.0.0.0";
@@ -2923,17 +2925,6 @@ function getMtsLinkTemplateContext(booking, employee, settings) {
   };
 }
 
-function splitClientName(clientName) {
-  const parts = String(clientName || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  return {
-    firstName: parts[0] || "",
-    secondName: parts.slice(1).join(" "),
-  };
-}
-
 function normalizeMtsLinkPayload(payload) {
   if (!payload || typeof payload !== "object") {
     return {};
@@ -2977,9 +2968,7 @@ function buildMtsLinkEventPayload(booking, employee, settings) {
     name: renderMtsLinkTemplate(settings.defaultRoomTitleTemplate, templateContext),
     description: renderMtsLinkTemplate(settings.defaultRoomDescriptionTemplate, templateContext),
     ...buildMtsLinkEventDeliverySettings(booking.start, settings.timeZone),
-    "accessSettings[isPasswordRequired]": "0",
-    "accessSettings[isModerationRequired]": "0",
-    "accessSettings[isRegistrationRequired]": "1",
+    ...buildMtsLinkEventAccessSettings(),
   };
 }
 
@@ -2988,18 +2977,6 @@ function buildMtsLinkSessionPayload(booking, settings) {
     startsAtTimestamp: formatMtsLinkDateTime(booking.start, settings.timeZone),
     startType: "autostart",
     lang: "RU",
-  };
-}
-
-function buildMtsLinkRegistrantPayload(booking) {
-  const { firstName, secondName } = splitClientName(booking.clientName);
-  return {
-    name: firstName || booking.clientName,
-    secondName,
-    email: booking.clientEmail,
-    role: "GUEST",
-    isAutoEnter: "true",
-    sendEmail: "false",
   };
 }
 
@@ -3143,17 +3120,15 @@ async function testMtsLinkConnection(settings) {
   return {
     ok: true,
     accessStatus: accessResult.status,
-    createStatus: smokeMeeting.registerStatus || smokeMeeting.rawStatus,
+    createStatus: smokeMeeting.rawStatus,
     message: "Подключение к MTS Link и создание тестовой встречи успешны.",
     lastSuccessMeeting: {
       createdAt: new Date().toISOString(),
       eventId: smokeMeeting.eventId,
       eventSessionId: smokeMeeting.eventSessionId,
       meetingId: smokeMeeting.meetingId,
-      registrantId: smokeMeeting.registrantId,
       meetingUrl: smokeMeeting.meetingUrl,
       rawStatus: smokeMeeting.rawStatus,
-      registerStatus: smokeMeeting.registerStatus,
     },
   };
 }
@@ -3195,40 +3170,18 @@ async function createMtsLinkMeeting(booking, employee, settings) {
     throw createMtsLinkError("MTS Link не вернул eventSessionId.", sessionResponse.responseText, 502);
   }
 
-  let registerResponse;
-  try {
-    registerResponse = await mtsLinkRequest(settings, `/eventsessions/${eventSessionId}/register`, {
-      method: "POST",
-      form: buildMtsLinkRegistrantPayload(booking),
-    });
-  } catch (error) {
-    throw withMtsLinkStep(error, "register");
-  }
-  const registerPayload = normalizeMtsLinkPayload(registerResponse.payload);
-  const meetingUrl = getFirstDefinedString(
-    registerPayload.link,
-    registerPayload.url,
-    registerPayload.joinLink,
-    registerPayload.guestLink,
-    registerPayload.personalLink,
-  );
+  const meetingUrl = getMtsLinkMeetingUrl(sessionPayload, eventPayload);
   if (!meetingUrl) {
-    throw createMtsLinkError("MTS Link не вернул персональную ссылку участника.", registerResponse.responseText, 502);
+    throw createMtsLinkError("MTS Link не вернул общую ссылку встречи.", sessionResponse.responseText, 502);
   }
 
   return {
     provider: "mts-link",
     eventId: String(eventId),
     eventSessionId: String(eventSessionId),
-    meetingId: getFirstDefinedString(registerPayload.meetingId, sessionPayload.meetingId, eventSessionId),
-    registrantId: getFirstDefinedString(
-      registerPayload.registrantId,
-      registerPayload.participantId,
-      registerPayload.id,
-    ),
+    meetingId: getFirstDefinedString(sessionPayload.meetingId, eventSessionId),
     meetingUrl,
     rawStatus: sessionResponse.status,
-    registerStatus: registerResponse.status,
   };
 }
 
@@ -4647,10 +4600,8 @@ async function createPublicBooking(booking, config = null) {
             eventId: mtsLinkMeeting.eventId,
             eventSessionId: mtsLinkMeeting.eventSessionId,
             meetingId: mtsLinkMeeting.meetingId,
-            registrantId: mtsLinkMeeting.registrantId,
             meetingUrl: mtsLinkMeeting.meetingUrl,
             rawStatus: mtsLinkMeeting.rawStatus,
-            registerStatus: mtsLinkMeeting.registerStatus,
           },
         },
       }));
