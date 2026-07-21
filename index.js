@@ -18,6 +18,10 @@ const {
   normalizeExternalMeetingUrl,
   shouldCreateMtsLink,
 } = require("./meeting-link");
+const {
+  buildMtsLinkEventDeliverySettings,
+  formatMtsLinkDateTime,
+} = require("./mts-link");
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT) || 3000;
@@ -2966,23 +2970,13 @@ function getFirstDefinedNumber(...values) {
   return null;
 }
 
-function formatMtsLinkDateTime(iso) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  return date.toISOString().replace(/\.\d{3}Z$/, "+00:00");
-}
-
 function buildMtsLinkEventPayload(booking, employee, settings) {
   const templateContext = getMtsLinkTemplateContext(booking, employee, settings);
   return {
     type: settings.meetingType || "meeting",
     name: renderMtsLinkTemplate(settings.defaultRoomTitleTemplate, templateContext),
     description: renderMtsLinkTemplate(settings.defaultRoomDescriptionTemplate, templateContext),
-    startsAtTimestamp: formatMtsLinkDateTime(booking.start),
-    startType: "autostart",
-    lang: "RU",
+    ...buildMtsLinkEventDeliverySettings(booking.start, settings.timeZone),
     "accessSettings[isPasswordRequired]": "0",
     "accessSettings[isModerationRequired]": "0",
     "accessSettings[isRegistrationRequired]": "1",
@@ -2991,7 +2985,7 @@ function buildMtsLinkEventPayload(booking, employee, settings) {
 
 function buildMtsLinkSessionPayload(booking, settings) {
   return {
-    startsAtTimestamp: formatMtsLinkDateTime(booking.start),
+    startsAtTimestamp: formatMtsLinkDateTime(booking.start, settings.timeZone),
     startType: "autostart",
     lang: "RU",
   };
