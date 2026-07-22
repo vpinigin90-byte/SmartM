@@ -287,6 +287,9 @@ body.booking-page.embedded-booking .booking-shell {
   grid-template-columns: 1fr;
   gap: 20px;
   align-items: start;
+  padding: 12px;
+  border-radius: 30px;
+  background: #ffffff;
 }
 
 .booking-copy,
@@ -333,6 +336,8 @@ body.booking-page.embedded-booking .booking-shell {
 }
 
 .smartm-widget {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
   grid-template-areas:
@@ -343,6 +348,19 @@ body.booking-page.embedded-booking .booking-shell {
   align-items: start;
   column-gap: 32px;
   row-gap: 18px;
+  overflow: hidden;
+  border-color: #272b2d;
+  background: #000000;
+}
+
+.smartm-widget::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: #000000 url("/booking-ribbons.png") center / cover no-repeat;
+  content: "";
+  opacity: 0.72;
+  pointer-events: none;
 }
 
 .booking-steps {
@@ -3751,6 +3769,17 @@ body.modal-open {
   padding: 36px 32px 40px;
 }
 
+.admin-login-screen {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  width: 100%;
+}
+
+.admin-login-screen.hidden-panel {
+  display: none;
+}
+
 .admin-login-copy {
   display: grid;
   justify-items: center;
@@ -3770,7 +3799,7 @@ body.modal-open {
 }
 
 .admin-shell .admin-login-form,
-.admin-shell .admin-login-content > .status {
+.admin-shell .admin-login-screen > .status {
   width: min(420px, 100%);
 }
 
@@ -3808,7 +3837,37 @@ body.modal-open {
   color: var(--primary);
 }
 
-.admin-shell .admin-login-content > .status {
+.admin-login-link,
+.admin-login-back {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-login-link {
+  justify-self: end;
+  margin-top: -4px;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.admin-login-back {
+  justify-self: center;
+  font-size: 14px;
+}
+
+.admin-login-link:hover,
+.admin-login-back:hover {
+  color: var(--primary);
+}
+
+.admin-shell .admin-login-screen > .status {
   margin: 0;
 }
 

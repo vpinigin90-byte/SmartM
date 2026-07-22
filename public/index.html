@@ -16,22 +16,61 @@
           />
         </header>
         <div class="admin-login-content">
-          <div class="admin-login-copy">
-            <h1>Вход в админ-панель</h1>
-            <p class="summary">Служебный доступ к админ-панели администратора</p>
+          <div id="admin-login-panel" class="admin-login-screen">
+            <div class="admin-login-copy">
+              <h1>Вход в админ-панель</h1>
+              <p class="summary">Служебный доступ к админ-панели администратора</p>
+            </div>
+            <form id="login-form" class="form admin-login-form">
+              <label class="field">
+                <span>Логин</span>
+                <input id="admin-username" type="text" autocomplete="username" value="admin" required />
+              </label>
+              <label class="field">
+                <span>Пароль</span>
+                <input id="admin-password" type="password" autocomplete="current-password" required />
+              </label>
+              <button id="forgot-password-button" class="admin-login-link" type="button">Забыли пароль?</button>
+              <button id="login-button" class="primary-button" type="submit">Войти</button>
+            </form>
+            <div id="login-status" class="status" aria-live="polite"></div>
           </div>
-          <form id="login-form" class="form admin-login-form">
-            <label class="field">
-              <span>Логин</span>
-              <input id="admin-username" type="text" autocomplete="username" value="admin" required />
-            </label>
-            <label class="field">
-              <span>Пароль</span>
-              <input id="admin-password" type="password" autocomplete="current-password" required />
-            </label>
-            <button id="login-button" class="primary-button" type="submit">Войти</button>
-          </form>
-          <div id="login-status" class="status" aria-live="polite"></div>
+
+          <div id="password-reset-request-panel" class="admin-login-screen hidden-panel">
+            <div class="admin-login-copy">
+              <h1>Сброс пароля</h1>
+              <p class="summary">Укажите e-mail администратора. Ссылка для смены пароля действует 15 минут.</p>
+            </div>
+            <form id="password-reset-request-form" class="form admin-login-form">
+              <label class="field">
+                <span>E-mail</span>
+                <input id="admin-reset-email" type="email" autocomplete="email" required />
+              </label>
+              <button id="password-reset-request-button" class="primary-button" type="submit">Отправить ссылку</button>
+              <button class="admin-login-back" type="button" data-auth-back>Вернуться ко входу</button>
+            </form>
+            <div id="password-reset-request-status" class="status" aria-live="polite"></div>
+          </div>
+
+          <div id="password-reset-confirm-panel" class="admin-login-screen hidden-panel">
+            <div class="admin-login-copy">
+              <h1>Новый пароль</h1>
+              <p class="summary">Придумайте новый пароль длиной не менее 12 символов.</p>
+            </div>
+            <form id="password-reset-confirm-form" class="form admin-login-form">
+              <label class="field">
+                <span>Новый пароль</span>
+                <input id="admin-new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />
+              </label>
+              <label class="field">
+                <span>Повторите пароль</span>
+                <input id="admin-new-password-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="128" required />
+              </label>
+              <button id="password-reset-confirm-button" class="primary-button" type="submit">Сохранить пароль</button>
+              <button class="admin-login-back" type="button" data-auth-back>Вернуться ко входу</button>
+            </form>
+            <div id="password-reset-confirm-status" class="status" aria-live="polite"></div>
+          </div>
         </div>
       </section>
 

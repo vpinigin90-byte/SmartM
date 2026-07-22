@@ -24,6 +24,14 @@ const {
   formatMtsLinkDateTime,
   getMtsLinkMeetingUrl,
 } = require("./mts-link");
+const {
+  createPasswordRecord,
+  createPasswordResetToken,
+  getPasswordValidationError,
+  normalizeAdminAuthState,
+  verifyPassword,
+  verifyPasswordResetToken,
+} = require("./admin-auth");
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT) || 3000;
@@ -34,11 +42,13 @@ const MAIL_RU_CALDAV_URLS = [
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const CONFIG_PATH = path.join(DATA_DIR, "smartm-config.json");
+const ADMIN_AUTH_PATH = path.join(DATA_DIR, "admin-auth.json");
 const LEARNING_DATA_PATH = path.join(DATA_DIR, "learning-data.json");
 const MEETING_FILES_DIR = path.join(DATA_DIR, "meeting-files");
 const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || "https://meet.scroll-tool.ru").replace(/\/+$/, "");
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === "production" ? "" : "Zz123456");
+const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
 const SMTP_HOST = String(process.env.SMTP_HOST || "").trim();
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_SECURE = String(process.env.SMTP_SECURE || "").trim().toLowerCase() === "true" || SMTP_PORT === 465;
@@ -59,6 +69,10 @@ const MAX_MEETING_FILES = 10;
 const MAX_PUBLIC_RANGE_DAYS = Number(process.env.MAX_PUBLIC_RANGE_DAYS) || 45;
 const MAX_ADMIN_RANGE_DAYS = Number(process.env.MAX_ADMIN_RANGE_DAYS) || 120;
 const LOGIN_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
+const PASSWORD_RESET_REQUEST_RATE_LIMIT = { limit: 3, windowMs: 60 * 60 * 1000 };
+const PASSWORD_RESET_CONFIRM_RATE_LIMIT = { limit: 8, windowMs: 15 * 60 * 1000 };
+const PASSWORD_RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
+const PASSWORD_RESET_COOLDOWN_MS = 60 * 1000;
 const PUBLIC_RATE_LIMIT = { limit: 60, windowMs: 10 * 60 * 1000 };
 const PUBLIC_BOOKING_IP_RATE_LIMIT = { limit: 20, windowMs: 15 * 60 * 1000 };
 const PUBLIC_BOOKING_EMAIL_RATE_LIMIT = { limit: 6, windowMs: 60 * 60 * 1000 };
@@ -77,6 +91,8 @@ const MTS_LINK_ALLOWED_HOSTS = new Set(
 const rateLimitBuckets = new Map();
 const publicBookingDuplicates = new Map();
 let configUpdateQueue = Promise.resolve();
+let adminAuthUpdateQueue = Promise.resolve();
+let adminAuthState = normalizeAdminAuthState();
 const PUBLIC_DEMO_DURATION_MINUTES = 60;
 const PUBLIC_DEMO_GAP_MINUTES = 30;
 const TELEGRAM_REMINDER_CHECK_MS = 60 * 1000;
@@ -1617,6 +1633,7 @@ function createSessionToken() {
   const payload = Buffer.from(
     JSON.stringify({
       username: ADMIN_USERNAME,
+      sessionVersion: adminAuthState.sessionVersion,
       expiresAt: Date.now() + 12 * 60 * 60 * 1000,
     }),
     "utf8",
@@ -1726,7 +1743,9 @@ function isAdminRequest(request) {
 
   try {
     const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return session.username === ADMIN_USERNAME && Number(session.expiresAt) > Date.now();
+    return session.username === ADMIN_USERNAME &&
+      Number(session.sessionVersion) === adminAuthState.sessionVersion &&
+      Number(session.expiresAt) > Date.now();
   } catch {
     return false;
   }
@@ -1742,9 +1761,14 @@ function isSafeMethod(method) {
 }
 
 function isAdminMutation(request, requestUrl) {
+  const csrfExemptPaths = new Set([
+    "/api/admin/login",
+    "/api/admin/password-reset/request",
+    "/api/admin/password-reset/confirm",
+  ]);
   return requestUrl.pathname.startsWith("/api/") &&
     !requestUrl.pathname.startsWith("/api/public/") &&
-    requestUrl.pathname !== "/api/admin/login" &&
+    !csrfExemptPaths.has(requestUrl.pathname) &&
     !isSafeMethod(request.method);
 }
 
@@ -2719,6 +2743,95 @@ async function saveConfig(config) {
   } finally {
     await fs.unlink(temporaryPath).catch(() => null);
   }
+}
+
+async function loadAdminAuthState() {
+  try {
+    const fileContents = await fs.readFile(ADMIN_AUTH_PATH, "utf8");
+    return normalizeAdminAuthState(JSON.parse(fileContents));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function saveAdminAuthState(state) {
+  const normalizedState = normalizeAdminAuthState(state);
+  await fs.mkdir(path.dirname(ADMIN_AUTH_PATH), { recursive: true });
+  const temporaryPath = `${ADMIN_AUTH_PATH}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(temporaryPath, JSON.stringify(normalizedState, null, 2), { encoding: "utf8", mode: 0o600 });
+    await fs.rename(temporaryPath, ADMIN_AUTH_PATH);
+    await fs.chmod(ADMIN_AUTH_PATH, 0o600);
+  } finally {
+    await fs.unlink(temporaryPath).catch(() => null);
+  }
+  return normalizedState;
+}
+
+async function initializeAdminAuth() {
+  const storedState = await loadAdminAuthState();
+  if (storedState?.password) {
+    adminAuthState = storedState;
+    return;
+  }
+
+  if (!ADMIN_PASSWORD) {
+    adminAuthState = storedState || normalizeAdminAuthState();
+    return;
+  }
+
+  const now = new Date().toISOString();
+  adminAuthState = await saveAdminAuthState({
+    ...(storedState || {}),
+    password: await createPasswordRecord(ADMIN_PASSWORD),
+    createdAt: storedState?.createdAt || now,
+    updatedAt: now,
+  });
+  console.log("[Security] Admin password migrated to the protected password store.");
+}
+
+function updateAdminAuth(mutator) {
+  const operation = adminAuthUpdateQueue.then(async () => {
+    const currentState = adminAuthState;
+    const nextState = await mutator(currentState);
+    adminAuthState = await saveAdminAuthState(nextState);
+    return adminAuthState;
+  });
+  adminAuthUpdateQueue = operation.catch(() => null);
+  return operation;
+}
+
+function isAdminPasswordConfigured() {
+  return Boolean(adminAuthState?.password?.hash);
+}
+
+function getPasswordResetRequestMessage() {
+  return "Если этот e-mail указан для администратора, мы отправили ссылку для сброса пароля.";
+}
+
+async function sendAdminPasswordResetEmail(token) {
+  const resetUrl = `${PUBLIC_BASE_URL}/admin#reset=${encodeURIComponent(token)}`;
+  const safeResetUrl = escapeHtml(resetUrl);
+  await sendSmtpMail({
+    to: ADMIN_EMAIL,
+    subject: "Сброс пароля SmartM",
+    text: [
+      "Получен запрос на сброс пароля администратора SmartM.",
+      "",
+      `Откройте ссылку в течение 15 минут: ${resetUrl}`,
+      "",
+      "Если вы не запрашивали сброс, просто проигнорируйте это письмо.",
+    ].join("\n"),
+    html: [
+      "<p>Получен запрос на сброс пароля администратора SmartM.</p>",
+      `<p><a href="${safeResetUrl}">Установить новый пароль</a></p>`,
+      "<p>Ссылка действует 15 минут и может быть использована только один раз.</p>",
+      "<p>Если вы не запрашивали сброс, просто проигнорируйте это письмо.</p>",
+    ].join(""),
+  });
 }
 
 async function loadLearningData() {
@@ -5175,7 +5288,7 @@ async function handleApi(request, requestUrl, response) {
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/admin/login") {
-    if (!ADMIN_PASSWORD) {
+    if (!isAdminPasswordConfigured()) {
       return json(response, 503, { error: "Админ-пароль не настроен на сервере." });
     }
     if (!checkRateLimit(request, "admin-login", LOGIN_RATE_LIMIT)) {
@@ -5184,9 +5297,9 @@ async function handleApi(request, requestUrl, response) {
 
     const body = await readRequestBody(request);
     const username = String(body.username || "").trim();
-    const password = String(body.password || "").trim();
+    const password = String(body.password || "");
 
-    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    if (username !== ADMIN_USERNAME || !await verifyPassword(password, adminAuthState.password)) {
       return json(response, 401, { error: "Неверный логин или пароль." });
     }
 
@@ -5196,6 +5309,100 @@ async function handleApi(request, requestUrl, response) {
       "Set-Cookie": createSessionCookie(sessionToken),
     });
     response.end(JSON.stringify({ ok: true, username: ADMIN_USERNAME, csrfToken: signCsrfToken(sessionToken) }));
+    return;
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/admin/password-reset/request") {
+    if (!checkRateLimit(request, "admin-password-reset-request", PASSWORD_RESET_REQUEST_RATE_LIMIT)) {
+      return json(response, 429, { error: "Слишком много запросов. Попробуйте позже." });
+    }
+    if (!ADMIN_EMAIL || !isEmail(ADMIN_EMAIL)) {
+      return json(response, 503, { error: "Восстановление пароля не настроено на сервере." });
+    }
+
+    const body = await readRequestBody(request);
+    const email = String(body.email || "").trim().toLowerCase();
+    if (!isEmail(email)) {
+      return json(response, 400, { error: "Введите корректный e-mail." });
+    }
+
+    const genericMessage = getPasswordResetRequestMessage();
+    if (email !== ADMIN_EMAIL) {
+      return json(response, 200, { ok: true, message: genericMessage });
+    }
+
+    const requestedAt = Date.parse(adminAuthState.reset?.requestedAt || "");
+    if (Number.isFinite(requestedAt) && requestedAt + PASSWORD_RESET_COOLDOWN_MS > Date.now()) {
+      return json(response, 200, { ok: true, message: genericMessage });
+    }
+
+    const { token, tokenHash } = createPasswordResetToken();
+    const now = Date.now();
+    await updateAdminAuth((currentState) => ({
+      ...currentState,
+      reset: {
+        tokenHash,
+        requestedAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + PASSWORD_RESET_TOKEN_TTL_MS).toISOString(),
+      },
+      updatedAt: new Date(now).toISOString(),
+    }));
+
+    try {
+      await sendAdminPasswordResetEmail(token);
+    } catch (error) {
+      await updateAdminAuth((currentState) => ({
+        ...currentState,
+        reset: verifyPasswordResetToken(currentState.reset, token) ? null : currentState.reset,
+        updatedAt: new Date().toISOString(),
+      }));
+      throw createHttpError("Не удалось отправить письмо. Проверьте настройки почты и попробуйте снова.", 503);
+    }
+
+    return json(response, 200, { ok: true, message: genericMessage });
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/api/admin/password-reset/confirm") {
+    if (!checkRateLimit(request, "admin-password-reset-confirm", PASSWORD_RESET_CONFIRM_RATE_LIMIT)) {
+      return json(response, 429, { error: "Слишком много попыток. Запросите новую ссылку позже." });
+    }
+
+    const body = await readRequestBody(request);
+    const token = String(body.token || "").trim();
+    const password = String(body.password || "");
+    const validationError = getPasswordValidationError(password, {
+      username: ADMIN_USERNAME,
+      email: ADMIN_EMAIL,
+    });
+    if (validationError) {
+      return json(response, 400, { error: validationError });
+    }
+    if (!verifyPasswordResetToken(adminAuthState.reset, token)) {
+      return json(response, 400, { error: "Ссылка недействительна или срок её действия истёк." });
+    }
+    if (await verifyPassword(password, adminAuthState.password)) {
+      return json(response, 400, { error: "Новый пароль должен отличаться от текущего." });
+    }
+
+    const passwordRecord = await createPasswordRecord(password);
+    await updateAdminAuth((currentState) => {
+      if (!verifyPasswordResetToken(currentState.reset, token)) {
+        throw createHttpError("Ссылка уже использована или срок её действия истёк.", 400);
+      }
+      return {
+        ...currentState,
+        password: passwordRecord,
+        reset: null,
+        sessionVersion: currentState.sessionVersion + 1,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    response.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": clearSessionCookie(),
+    });
+    response.end(JSON.stringify({ ok: true, message: "Пароль изменён. Теперь можно войти с новым паролем." }));
     return;
   }
 
@@ -6102,16 +6309,26 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-if (!process.env.ADMIN_PASSWORD) {
-  console.warn("[Security] ADMIN_PASSWORD is not set. Development fallback is active outside production.");
-}
-
 if (!process.env.SESSION_SECRET) {
   console.warn("[Security] SESSION_SECRET is not set. Sessions will reset on server restart.");
 }
 
-server.listen(PORT, HOST, () => {
-  console.log(`SmartM is listening on http://${HOST}:${PORT}`);
+async function startServer() {
+  await initializeAdminAuth();
+  if (!isAdminPasswordConfigured()) {
+    console.warn("[Security] Admin password is not configured.");
+  }
+  if (!ADMIN_EMAIL) {
+    console.warn("[Security] ADMIN_EMAIL is not set. Password reset is disabled.");
+  }
+  server.listen(PORT, HOST, () => {
+    console.log(`SmartM is listening on http://${HOST}:${PORT}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error("SmartM failed to start:", error);
+  process.exitCode = 1;
 });
 
 setInterval(() => {

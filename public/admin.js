@@ -14,6 +14,20 @@ const loginButton = document.querySelector("#login-button");
 const loginStatusNode = document.querySelector("#login-status");
 const adminUsernameInput = document.querySelector("#admin-username");
 const adminPasswordInput = document.querySelector("#admin-password");
+const adminLoginPanel = document.querySelector("#admin-login-panel");
+const forgotPasswordButton = document.querySelector("#forgot-password-button");
+const passwordResetRequestPanel = document.querySelector("#password-reset-request-panel");
+const passwordResetRequestForm = document.querySelector("#password-reset-request-form");
+const passwordResetRequestButton = document.querySelector("#password-reset-request-button");
+const passwordResetRequestStatus = document.querySelector("#password-reset-request-status");
+const adminResetEmailInput = document.querySelector("#admin-reset-email");
+const passwordResetConfirmPanel = document.querySelector("#password-reset-confirm-panel");
+const passwordResetConfirmForm = document.querySelector("#password-reset-confirm-form");
+const passwordResetConfirmButton = document.querySelector("#password-reset-confirm-button");
+const passwordResetConfirmStatus = document.querySelector("#password-reset-confirm-status");
+const adminNewPasswordInput = document.querySelector("#admin-new-password");
+const adminNewPasswordConfirmInput = document.querySelector("#admin-new-password-confirm");
+const authBackButtons = [...document.querySelectorAll("[data-auth-back]")];
 const logoutButton = document.querySelector("#logout-button");
 const homeLogoutButton = document.querySelector("#home-logout-button");
 const dashboardLogoutButton = document.querySelector("#dashboard-logout-button");
@@ -203,6 +217,40 @@ function setStatus(message, kind = "") {
 function setLoginStatus(message, kind = "") {
   loginStatusNode.textContent = message;
   loginStatusNode.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function setAuthStatus(node, message, kind = "") {
+  node.textContent = message;
+  node.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function getPasswordResetTokenFromHash() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return String(params.get("reset") || "").trim();
+}
+
+function clearPasswordResetHash() {
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+}
+
+function showAuthScreen(screen, { clearHash = false } = {}) {
+  adminLoginPanel.classList.toggle("hidden-panel", screen !== "login");
+  passwordResetRequestPanel.classList.toggle("hidden-panel", screen !== "request");
+  passwordResetConfirmPanel.classList.toggle("hidden-panel", screen !== "confirm");
+  if (clearHash) {
+    clearPasswordResetHash();
+  }
+  if (screen === "request") {
+    adminResetEmailInput.focus();
+  } else if (screen === "confirm") {
+    adminNewPasswordInput.focus();
+  } else {
+    adminPasswordInput.focus();
+  }
+}
+
+function syncAuthScreenFromHash() {
+  showAuthScreen(getPasswordResetTokenFromHash() ? "confirm" : "login");
 }
 
 function setEmployeeActionStatus(message, kind = "") {
@@ -762,10 +810,64 @@ async function loginAdmin(event) {
   }
 }
 
+async function requestPasswordReset(event) {
+  event.preventDefault();
+  passwordResetRequestButton.disabled = true;
+  setAuthStatus(passwordResetRequestStatus, "Отправляю ссылку...", "");
+
+  try {
+    const payload = await apiRequest("/api/admin/password-reset/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: adminResetEmailInput.value.trim() }),
+    });
+    setAuthStatus(passwordResetRequestStatus, payload.message, "success");
+  } catch (error) {
+    setAuthStatus(passwordResetRequestStatus, error.message, "error");
+  } finally {
+    passwordResetRequestButton.disabled = false;
+  }
+}
+
+async function confirmPasswordReset(event) {
+  event.preventDefault();
+  const token = getPasswordResetTokenFromHash();
+  const password = adminNewPasswordInput.value;
+  const passwordConfirmation = adminNewPasswordConfirmInput.value;
+
+  if (!token) {
+    setAuthStatus(passwordResetConfirmStatus, "Ссылка для сброса пароля отсутствует.", "error");
+    return;
+  }
+  if (password !== passwordConfirmation) {
+    setAuthStatus(passwordResetConfirmStatus, "Пароли не совпадают.", "error");
+    return;
+  }
+
+  passwordResetConfirmButton.disabled = true;
+  setAuthStatus(passwordResetConfirmStatus, "Сохраняю новый пароль...", "");
+  try {
+    const payload = await apiRequest("/api/admin/password-reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    adminNewPasswordInput.value = "";
+    adminNewPasswordConfirmInput.value = "";
+    showAuthScreen("login", { clearHash: true });
+    setLoginStatus(payload.message, "success");
+  } catch (error) {
+    setAuthStatus(passwordResetConfirmStatus, error.message, "error");
+  } finally {
+    passwordResetConfirmButton.disabled = false;
+  }
+}
+
 async function logoutAdmin() {
   await apiRequest("/api/admin/logout", { method: "POST" }).catch(() => null);
   state.csrfToken = "";
   setAdminVisible(false);
+  showAuthScreen("login", { clearHash: true });
   setStatus("", "");
   setLoginStatus("Вы вышли из админ-панели.", "success");
 }
@@ -1027,6 +1129,19 @@ credentialsForm.addEventListener("submit", async (event) => {
 });
 
 loginForm.addEventListener("submit", loginAdmin);
+forgotPasswordButton.addEventListener("click", () => {
+  setAuthStatus(passwordResetRequestStatus, "", "");
+  showAuthScreen("request", { clearHash: true });
+});
+passwordResetRequestForm.addEventListener("submit", requestPasswordReset);
+passwordResetConfirmForm.addEventListener("submit", confirmPasswordReset);
+authBackButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setAuthStatus(passwordResetRequestStatus, "", "");
+    setAuthStatus(passwordResetConfirmStatus, "", "");
+    showAuthScreen("login", { clearHash: true });
+  });
+});
 logoutButton.addEventListener("click", logoutAdmin);
 homeLogoutButton.addEventListener("click", logoutAdmin);
 dashboardLogoutButton.addEventListener("click", logoutAdmin);
@@ -1127,6 +1242,7 @@ function initializeAdmin() {
 renderEmbedCode();
 
 setAdminVisible(false);
+syncAuthScreenFromHash();
 checkAdminSession()
   .then((authenticated) => {
     if (!authenticated) {
